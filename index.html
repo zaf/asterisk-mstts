@@ -1,88 +1,184 @@
-<!DOCTYPE html>
-<html>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
 <head>
-  <meta charset='utf-8'>
+  <meta name="generator" content="HTML Tidy for Linux/x86 (vers 25 March 2009), see www.w3.org" />
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 
-  <title>zaf/asterisk-mstts @ GitHub</title>
-
+  <title>Speech synthesis using MS Translator for Asterisk PBX</title>
+  <meta name="description" content=
+  "Asterisk AGI script that uses Microsoft Translator text to speech service." />
   <style type="text/css">
-    body {
-      margin-top: 1.0em;
-      background-color: #1613b0;
-      font-family: Helvetica, Arial, FreeSans, san-serif;
-      color: #ffffff;
+/*<![CDATA[*/
+                body {
+                margin-top: 1.0em;
+                background-color: #f6772f;
+                  font-family: Helvetica, Arial, FreeSans, san-serif;
+                color: #000000;
     }
     #container {
       margin: 0 auto;
-      width: 700px;
+      width: 750px;
     }
-    h1 { font-size: 3.8em; color: #e9ec4f; margin-bottom: 3px; }
-    h1 .small { font-size: 0.4em; }
-    h1 a { text-decoration: none }
-    h2 { font-size: 1.5em; color: #e9ec4f; }
-    h3 { text-align: center; color: #e9ec4f; }
-    a { color: #e9ec4f; }
+                h1 { font-size: 2.5em; color: #ffffff; margin-bottom: 3px; }
+                h1 .small { font-size: 0.4em; }
+                h1 a { text-decoration: none }
+                h2 { font-size: 1.5em; color: #ffffff; }
+    h3 { text-align: center; color: #ffffff; }
+    a { color: #ffffff; }
     .description { font-size: 1.2em; margin-bottom: 30px; margin-top: 30px; font-style: italic;}
     .download { float: right; }
-    pre { background: #000; color: #fff; padding: 15px;}
+                pre { background: #000; color: #fff; padding: 15px;}
     hr { border: 0; width: 80%; border-bottom: 1px solid #aaa}
     .footer { text-align:center; padding-top:30px; font-style: italic; }
+  /*]]>*/
+  </style>
+  <style type="text/css">
+/*<![CDATA[*/
+  img.c1 {position: absolute; top: 0; right: 0; border: 0;}
+  /*]]>*/
   </style>
 </head>
 
 <body>
-  <a href="https://github.com/zaf/asterisk-mstts"><img style="position: absolute; top: 0; right: 0; border: 0;" src="http://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png" alt="Fork me on GitHub" /></a>
+  <a href="http://github.com/zaf/asterisk-mstts"><img class="c1" src=
+  "http://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png" alt=
+  "Fork me on GitHub" /></a>
 
   <div id="container">
-
     <div class="download">
-      <a href="https://github.com/zaf/asterisk-mstts/zipball/master">
-        <img border="0" width="90" src="https://github.com/images/modules/download/zip.png"></a>
-      <a href="https://github.com/zaf/asterisk-mstts/tarball/master">
-        <img border="0" width="90" src="https://github.com/images/modules/download/tar.png"></a>
+      <a href="http://github.com/zaf/asterisk-mstts/zipball/master"><img border="0" width="90"
+      src="http://github.com/images/modules/download/zip.png" /></a> <a href=
+      "http://github.com/zaf/asterisk-mstts/tarball/master"><img border="0" width="90" src=
+      "http://github.com/images/modules/download/tar.png" /></a>
     </div>
 
-    <h1><a href="https://github.com/zaf/asterisk-mstts">asterisk-mstts</a>
-      <span class="small">by <a href="https://github.com/zaf">zaf</a></span></h1>
+    <h1><a href="http://github.com/zaf/asterisk-mstts">Speech synthesis for Asterisk using
+	Microsoft Translator</a></h1>
 
     <div class="description">
-      Asterisk AGI script that makes use of Microsoft Translator text to speech service.
+      AGI script for the Asterisk open source PBX which allows you to use Microsoft's Translator
+	  voice synthesis engine to render text to speech.
     </div>
 
-    
+    <p>This script makes use of MS Translator text to speech service in order to render text
+    to speech and play it back to the user. It supports a variety of different languages (See
+    <a href="https://raw.github.com/zaf/asterisk-mstts/master/README">README</a> for a complete
+    list), local caching of the voice data and also supports 8kHz or 16kHz sample rates to provide
+    the best possible sound quality along with the use of wideband codecs.</p>
 
-    
+    <h2>Dependencies</h2>
 
-    
+    <p>perl : The Perl Programming Language<br />
+    perl-libwww : The World-Wide Web library for Perl<br />
+    sox : Sound eXchange, sound processing program<br />
+    API Key (appid) from <a href="http://www.bing.com/developers/appids.aspx">Microsoft</a><br />
+    Internet access in order to contact MS and get the voice data.</p>
 
-    
+    <h2>Install</h2>
 
-    
-      <h2>Authors</h2>
-      <p>Lefteris Zafiris (zaf.000@gmail.com)<br/>      </p>
-    
+    <p>To install copy mstts.agi to your agi-bin directory.<br />
+    Usually this is /var/lib/asterisk/agi-bin/<br />
+    To make sure check your /etc/asterisk/asterisk.conf file.</p>
 
-    
-      <h2>Contact</h2>
-      <p>Lefteris Zafiris (zaf.000@gmail.com)<br/>      </p>
-    
+    <h2>Usage</h2>
+
+    <p><b>agi(mstts.agi,text,[language],[intkey])</b>: This will invoke the MS Translator TTS engine,
+    render the text string to speech and play it back to the user. If 'intkey' is set the script
+    will wait for user input. Any given interrupt keys will cause the playback to immediately
+    terminate and the dialplan to proceed to the matching extension (for use in IVR). The script
+    contacts microsoft's TTS service in order to get the voice data which then stores in a local cache
+    (by default /tmp/) for future use. Parameters like default language, use of cache and cache dir
+    can be set up by the user.</p>
+
+    <p>Asterisk dialplan example:<br /></p>
+    <pre>
+;MsTTS Demo
+
+exten =&gt; 1234,1,Answer()
+  ;;Play mesage in English:
+exten =&gt; 1234,n,agi(mstts.agi,"This is a simple text to speech synthesis test in english.",en)
+  ;;Play message in Spanish:
+exten =&gt; 1234,n,agi(mstts.agi,"Esta es una simple prueba en español.",es)
+  ;;Play message in Japanese:
+exten =&gt; 1234,n,agi(mstts.agi,"これは、日本の簡単なテストです。良い一日を。",ja)
+  ;;Play message in simplified Chinese:
+exten =&gt; 1234,n,agi(mstts.agi,"这是一个简单的测试，在中国。有一个愉快的一天。",zh-cn)
+</pre>
+    <pre>
+;A simple dynamic IVR using MsTTS
+
+[my_ivr]
+exten =&gt; s,1,Answer()
+exten =&gt; s,n,Set(TIMEOUT(digit)=5)
+exten =&gt; s,n,agi(mstts.agi,"Welcome to my small interactive voice response menu.",en)
+        ;;Wait for digit:
+exten =&gt; s,n(start),agi(mstts.agi,"Please dial a digit.",en,any)
+exten =&gt; s,n,WaitExten()
+
+        ;;PLayback the name of the digit and wait for another one:
+exten =&gt; _X,1,agi(mstts.agi,"You just pressed ${EXTEN}. Try another one please.",en,any)
+exten =&gt; _X,n,WaitExten()
+
+exten =&gt; i,1,agi(mstts.agi,"Invalid extension.",en)
+exten =&gt; i,n,goto(s,start)
+
+exten =&gt; t,1,agi(mstts.agi,"Request timed out.",en)
+exten =&gt; t,n,goto(s,start)
+
+exten =&gt; h,1,Hangup()
+</pre>
+
+    <h2>License</h2>
+
+    <p>The MS Translator TTS script for asterisk is free software distributed under the GNU General Public
+    License version 2</p>
+
+    <h2>Authors</h2>
+
+    <p><a href="http://github.com/zaf">Lefteris Zafiris</a> (zaf.000@gmail.com)<br />
+    <br /></p>
 
     <h2>Download</h2>
-    <p>
-      You can download this project in either
-      <a href="https://github.com/zaf/asterisk-mstts/zipball/master">zip</a> or
-      <a href="https://github.com/zaf/asterisk-mstts/tarball/master">tar formats.
-    </p>
-    <p>You can also clone the project with <a href="http://git-scm.com">Git</a>
-      by running:
-      <pre>$ git clone git://github.com/zaf/asterisk-mstts</pre>
-    </p>
+
+    <p>You can get the latest stable version <a href=
+    "https://github.com/downloads/zaf/asterisk-mstts/asterisk-mstts-0.1.tar.gz">here</a>.<br />
+
+    Develompent snapshots are available in either <a href=
+    "http://github.com/zaf/asterisk-mstts/zipball/master">zip</a> or <a href=
+    "http://github.com/zaf/asterisk-mstts/tarball/master">tar</a> formats.</p>
+
+    <p>You can also clone the project with <a href="http://git-scm.com">Git</a> by running:</p>
+    <pre>
+$ git clone git://github.com/zaf/asterisk-mstts
+</pre>
+
+    <h2>Links</h2>
+
+    <p><a href="http://zaf.github.com/asterisk-speech-recog/">Speech recognition for
+    Asterisk</a><br />
+	<a href="http://zaf.github.com/asterisk-googletts/">Speech synthesis using Google voice API for
+	Asterisk</a><br />
+    <a href="http://zaf.github.com/Asterisk-Flite/">Asterisk Flite text to speech module</a><br />
+    <a href="http://zaf.github.com/Asterisk-eSpeak/">Asterisk e-Speak text to speech module</a></p>
 
     <div class="footer">
-      get the source code on GitHub : <a href="https://github.com/zaf/asterisk-mstts">zaf/asterisk-mstts</a>
+      get the source code on GitHub : <a href=
+      "http://github.com/zaf/asterisk-mstts">zaf/asterisk-mstts</a>
     </div>
-
-  </div>
-
+  </div><script type="text/javascript">
+//<![CDATA[
+  var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+  document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+  //]]>
+  </script><script type="text/javascript">
+//<![CDATA[
+  try {
+  var pageTracker = _gat._getTracker("UA-10482811-6");
+  pageTracker._trackPageview();
+  } catch(err) {}
+  //]]>
+  </script>
 </body>
 </html>
