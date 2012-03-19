@@ -44,7 +44,6 @@ getopts('o:l:t:f:i:hqv', \%options);
 
 # Dislpay help messages #
 VERSION_MESSAGE() if (defined $options{h});
-lang_list() if (defined $options{v});
 
 if (!$mpg123) {
 	say_msg("mpg123 is missing. Aborting.");
@@ -58,6 +57,8 @@ if (!$appid) {
 	say_msg("You must have an App ID from Microsoft to use this script.");
 	exit 1;
 }
+
+lang_list() if (defined $options{v});
 
 if (defined $options{l}) {
 # check if language setting is valid #
