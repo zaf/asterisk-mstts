@@ -1,9 +1,9 @@
 #!/usr/bin/env perl
 
 #
-# AGI script that uses Google's translate text to speech engine.
+# AGI script that uses MS Translator API for speech synthesis.
 #
-# Copyright (C) 2011 -2012, Lefteris Zafiris <zaf.000@gmail.com>
+# Copyright (C) 2012, Lefteris Zafiris <zaf.000@gmail.com>
 #
 # This program is free software, distributed under the terms of
 # the GNU General Public License Version 2. See the COPYING file
@@ -90,6 +90,9 @@ $name = " -- $AGI{request}:";
 #	warn "$name AGI Environment Dump:\n";
 #	warn "$name $_ = $AGI{$_}\n" foreach (sort keys %AGI);
 #}
+
+# Abort if there is not API key. #
+die "$name No API key found. Aborting.\n" if (!$appid);
 
 # Abort if required programs not found. #
 die "$name sox is missing. Aborting.\n" if (!$sox);
