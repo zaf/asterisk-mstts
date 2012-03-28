@@ -102,28 +102,19 @@ for ($input) {
 $ua = LWP::UserAgent->new;
 $ua->agent("Mozilla/5.0 (X11; Linux; rv:8.0) Gecko/20100101");
 $ua->timeout($timeout);
-
+($mp3fh, $mp3name) = tempfile(
+	"mstts_XXXXXX",
+	SUFFIX => ".mp3",
+	DIR    => $tmpdir,
+	UNLINK => 1,
+);
 $request = HTTP::Request->new(
 	'GET' => "$url/Speak?text=$input&language=$lang&format=$format&options=MaxQuality&appid=$appid"
 );
-
-$response = $ua->request($request);
+$response = $ua->request($request, $mp3name);
 if (!$response->is_success) {
 	say_msg("Failed to fetch speech data.");
 	exit 1;
-} else {
-	($mp3fh, $mp3name) = tempfile(
-		"mstts_XXXXXX",
-		SUFFIX => ".mp3",
-		DIR    => $tmpdir,
-		UNLINK => 1,
-	);
-	if (!open($mp3fh, ">", "$mp3name")) {
-		say_msg("Cant read temp file $mp3name");
-		exit 1;
-	}
-	print $mp3fh $response->content;
-	close $mp3fh;
 }
 
 # Set mpg123 args and process sound file #

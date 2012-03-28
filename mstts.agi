@@ -165,19 +165,15 @@ my $ua = LWP::UserAgent->new;
 $ua->agent("Mozilla/5.0 (X11; Linux; rv:8.0) Gecko/20100101");
 $ua->timeout(5);
 $text = escape($text);
-my $request = HTTP::Request->new(
-	'GET' => "$url/Speak?text=$text&language=$lang&format=$format&options=MaxQuality&appid=$appid"
-);
 # Hnadle interrupts #
 $SIG{'INT'} = \&int_handler;
 $SIG{'HUP'} = \&int_handler;
-
-my $response = $ua->request($request);
-die "$name Failed to fetch file.\n" if (!$response->is_success);
 my ($tmpfh, $tmpname) = tempfile("mstts_XXXXXX", DIR => $tmpdir, UNLINK => 1);
-open($tmpfh, ">", "$tmpname") or die "$name Failed to open file: $!\n";
-print $tmpfh $response->content;
-close $tmpfh or warn "$name Failed to close file: $!\n";
+my $request = HTTP::Request->new(
+	'GET' => "$url/Speak?text=$text&language=$lang&format=$format&options=MaxQuality&appid=$appid"
+);
+my $response = $ua->request($request, $tmpname);
+die "$name Failed to fetch file.\n" if (!$response->is_success);
 
 # Resample file if needed #
 if ($samplerate != 16000) {
