@@ -101,7 +101,9 @@ for ($input) {
 
 $ua = LWP::UserAgent->new;
 $ua->agent("Mozilla/5.0 (X11; Linux; rv:8.0) Gecko/20100101");
+$ua->env_proxy;
 $ua->timeout($timeout);
+
 ($mp3fh, $mp3name) = tempfile(
 	"mstts_XXXXXX",
 	SUFFIX => ".mp3",
