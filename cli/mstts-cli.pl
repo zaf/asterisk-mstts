@@ -29,28 +29,29 @@ my $input;
 my $ua;
 my $request;
 my $response;
-my $mp3fh;
-my $mp3name;
+my $tmpfh;
+my $tmpname;
+my $samplerate;
+my @soxargs;
 my $lang    = "en";
-my $format  = "audio/mp3";
+my $format  = "audio/wav";
 my $tmpdir  = "/tmp";
 my $timeout = 10;
 my $url     = "http://api.microsofttranslator.com/V2/Http.svc";
-my $mpg123  = `/usr/bin/which mpg123`;
+my $sox     = `/usr/bin/which sox`;
 
 VERSION_MESSAGE() if (!@ARGV);
 
-getopts('o:l:t:f:i:hqv', \%options);
+getopts('o:l:t:r:f:i:hqv', \%options);
 
 # Dislpay help messages #
 VERSION_MESSAGE() if (defined $options{h});
 
-if (!$mpg123) {
-	say_msg("mpg123 is missing. Aborting.");
+if (!$sox) {
+	say_msg("sox is missing. Aborting.");
 	exit 1;
 }
-chomp($mpg123);
-
+chomp($sox);
 
 $appid = $options{i} if (defined $options{i});
 if (!$appid) {
@@ -70,7 +71,14 @@ if (defined $options{l}) {
 	}
 }
 
-$format = "audio/wav" if (defined $options{o});
+if (defined $options{r}) {
+# set audio sample rate #
+	if ($options{r} =~ /\d+/) {
+		$samplerate = $options{r};
+	} else {
+		say_msg("Invalid sample rate, using default.");
+	}
+}
 
 # Get input text #
 if (defined $options{t}) {
@@ -104,7 +112,7 @@ $ua->agent("Mozilla/5.0 (X11; Linux; rv:8.0) Gecko/20100101");
 $ua->env_proxy;
 $ua->timeout($timeout);
 
-($mp3fh, $mp3name) = tempfile(
+($tmpfh, $tmpname) = tempfile(
 	"mstts_XXXXXX",
 	SUFFIX => ".mp3",
 	DIR    => $tmpdir,
@@ -113,19 +121,25 @@ $ua->timeout($timeout);
 $request = HTTP::Request->new(
 	'GET' => "$url/Speak?text=$input&language=$lang&format=$format&options=MaxQuality&appid=$appid"
 );
-$response = $ua->request($request, $mp3name);
+$response = $ua->request($request, $tmpname);
 if (!$response->is_success) {
 	say_msg("Failed to fetch speech data.");
 	exit 1;
 }
 
-# Set mpg123 args and process sound file #
+# Set sox args and process wav file #
 if (defined $options{o}) {
-	move("$mp3name", "$options{o}");
-} elsif (system($mpg123, "-q", "$mp3name")) {
-	say_msg("Failed to process sound file.");
+	@soxargs = ($sox, "-q", $tmpname, $options{o});
+	push(@soxargs, ("rate", $samplerate)) if ($samplerate);
+} else {
+	@soxargs = ($sox, "-q", $tmpname, "-t", "alsa", "-d");
+}
+
+if (system(@soxargs)) {
+	say_msg("sox failed to process sound file.");
 	exit 1;
 }
+
 exit 0;
 
 sub say_msg {
@@ -142,14 +156,15 @@ sub VERSION_MESSAGE {
 		 " -t <text>      text string to synthesize\n",
 		 " -f <file>      text file to synthesize\n",
 		 " -l <lang>      specify the language to use, defaults to 'en' (English)\n",
-		 " -o <filename>  write output as wav file\n",
+		 " -r <rate>      specify the output sampling rate in Hertz (default 16000)\n",
+		 " -o <filename>  save output as file\n",
 		 " -i <appID>     set the App ID from MS\n",
 		 " -q             quiet (Don't print any messages or warnings)\n",
 		 " -h             this help message\n",
 		 " -v             suppoted languages list\n\n",
 		 "Examples:\n",
-		 "$0 -l en -t \"Hello world\"\n Have the synthesized speech played back to the user.\n",
-		 "$0 -o hello.wav -l en -t \"Hello world\"\n Save the synthesized speech as a wav file.\n\n";
+		 "$0 -l en -t \"Hello world\"\n\tHave the synthesized speech played back to the user.\n",
+		 "$0 -o hello.wav -l en -t \"Hello world\"\n\tSave the synthesized speech as a sound file.\n\n";
 	exit 1;
 }
 
