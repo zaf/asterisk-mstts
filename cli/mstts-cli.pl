@@ -177,7 +177,7 @@ sub lang_list {
 	$response = $ua->request($request);
 	if ($response->is_success) {
 		print "Supported languages list:\n",
-			join("\n", grep(/[a-z\-]{2,}/, split(/<.+?>|<\/.+?>/,$response->content))), "\n";
+			join("\n", grep(/[a-z\-]{2,}/, split(/<.+?>/, $response->content))), "\n";
 	} else {
 		say_msg("Failed to fetch language list.");
 	}
