@@ -3,8 +3,13 @@
 #
 # Script that uses Microsoft Translator for text to speech synthesis.
 #
-# In order to use this script an API Key (appid)
-# from http://www.bing.com/developers/appids.aspx is needed.
+# In order to use this script you have to subscribe to the Microsoft
+# Translator API on Azure Marketplace:
+# https://datamarket.azure.com/developer/applications/
+#
+# Existing API Keys from http://www.bing.com/developers/appids.aspx
+# still work but they are considered deprecated and this method
+# is no longer supported.
 #
 # Copyright (C) 2012, Lefteris Zafiris <zaf.000@gmail.com>
 #
@@ -21,14 +26,19 @@ use CGI::Util qw(escape);
 use LWP::UserAgent;
 
 # --------------------------------------- #
+# Here you can assing your client ID and  #
+# client secret from Azure Marketplace.   #
+my $clientid = "";
+my $clientsecret = "";
+
+#         ****DEPRECATED****              #
 # Here you can assign your App ID from MS #
 my $appid   = "";
+#         ****DEPRECATED****              #
 # --------------------------------------- #
+
 my %options;
 my $input;
-my $ua;
-my $request;
-my $response;
 my $tmpfh;
 my $tmpname;
 my $samplerate;
@@ -54,10 +64,12 @@ if (!$sox) {
 chomp($sox);
 
 $appid = $options{i} if (defined $options{i});
+$appid = get_access_token() if (!$appid);
 if (!$appid) {
-	say_msg("You must have an App ID from Microsoft to use this script.");
+	say_msg("You must have a client ID from Azure Market place or an App ID from Microsoft to use this script.");
 	exit 1;
 }
+$appid = escape($appid);
 
 lang_list() if (defined $options{v});
 
@@ -107,21 +119,21 @@ for ($input) {
 	$_ = escape($_);
 }
 
-$ua = LWP::UserAgent->new;
+my $ua = LWP::UserAgent->new;
 $ua->agent("Mozilla/5.0 (X11; Linux; rv:8.0) Gecko/20100101");
 $ua->env_proxy;
 $ua->timeout($timeout);
 
 ($tmpfh, $tmpname) = tempfile(
 	"mstts_XXXXXX",
-	SUFFIX => ".mp3",
+	SUFFIX => ".wav",
 	DIR    => $tmpdir,
 	UNLINK => 1,
 );
-$request = HTTP::Request->new(
+my $request = HTTP::Request->new(
 	'GET' => "$url/Speak?text=$input&language=$lang&format=$format&options=MaxQuality&appid=$appid"
 );
-$response = $ua->request($request, $tmpname);
+my $response = $ua->request($request, $tmpname);
 if (!$response->is_success) {
 	say_msg("Failed to fetch speech data.");
 	exit 1;
@@ -141,6 +153,47 @@ if (system(@soxargs)) {
 }
 
 exit 0;
+
+sub get_access_token {
+# Obtaining an Access Token #
+	my $authurl = "https://datamarket.accesscontrol.windows.net/v2/OAuth2-13/";
+	my $ua = LWP::UserAgent->new(ssl_opts => {verify_hostname => 1});
+	$ua->agent("Mozilla/5.0 (X11; Linux; rv:8.0) Gecko/20100101");
+	$ua->timeout($timeout);
+	my $response = $ua->post(
+		$authurl,
+		[
+			client_id => $clientid,
+			client_secret => $clientsecret,
+			scope => 'http://api.microsofttranslator.com',
+			grant_type => 'client_credentials',
+		],
+	);
+	if ($response->is_success) {
+		$response->content =~ /^\{"access_token":"(.*?)","token_type":".*"\}$/;
+		my $token = "$1";
+		return("Bearer $token");
+	} else {
+		say_msg("Failed to get Access Token.");
+		return("");
+	}
+}
+
+sub lang_list {
+# Display the list of supported languages #
+	my $ua = LWP::UserAgent->new;
+	$ua->agent("Mozilla/5.0 (X11; Linux; rv:8.0) Gecko/20100101");
+	$ua->timeout($timeout);
+	my $request = HTTP::Request->new('GET' => "$url/GetLanguagesForSpeak?appid=$appid");
+	my $response = $ua->request($request);
+	if ($response->is_success) {
+		print "Supported languages list:\n",
+			join("\n", grep(/[a-z\-]{2,}/, split(/<.+?>/, $response->content))), "\n";
+	} else {
+		say_msg("Failed to fetch language list.");
+	}
+	exit 1;
+}
 
 sub say_msg {
 # Print messages to user if 'quiet' flag is not set #
@@ -165,21 +218,5 @@ sub VERSION_MESSAGE {
 		 "Examples:\n",
 		 "$0 -l en -t \"Hello world\"\n\tHave the synthesized speech played back to the user.\n",
 		 "$0 -o hello.wav -l en -t \"Hello world\"\n\tSave the synthesized speech as a sound file.\n\n";
-	exit 1;
-}
-
-sub lang_list {
-# Display the list of supported languages #
-	$ua = LWP::UserAgent->new;
-	$ua->agent("Mozilla/5.0 (X11; Linux; rv:8.0) Gecko/20100101");
-	$ua->timeout($timeout);
-	$request = HTTP::Request->new('GET' => "$url/GetLanguagesForSpeak?appid=$appid");
-	$response = $ua->request($request);
-	if ($response->is_success) {
-		print "Supported languages list:\n",
-			join("\n", grep(/[a-z\-]{2,}/, split(/<.+?>/, $response->content))), "\n";
-	} else {
-		say_msg("Failed to fetch language list.");
-	}
 	exit 1;
 }
