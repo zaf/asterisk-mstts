@@ -21,7 +21,14 @@
 # The script contacts Microsoft Translate TTS service in order to get the voice data
 # which then stores in a local cache (by default /tmp/) for future use.
 #
-# An API Key (appid) from http://www.bing.com/developers/appids.aspx is required.
+# In order to use this script you have to subscribe to the Microsoft
+# Translator API on Azure Marketplace:
+# https://datamarket.azure.com/developer/applications/
+#
+# Existing API Keys from http://www.bing.com/developers/appids.aspx
+# still work but they are considered deprecated and this method
+# is no longer supported.
+#
 # Parameters like default language, sample rate, caching and cache dir
 # can be set up by altering the following variables:
 # Default langeuage: $lang
@@ -40,28 +47,33 @@ use CGI::Util qw(escape);
 use LWP::UserAgent;
 $| = 1;
 
-# ----------------------------- #
-#   User defined parameters:    #
-# ----------------------------- #
-#  App ID from MS               #
+# ----------------------------------- #
+#   User defined parameters:          #
+# ----------------------------------- #
+# Your Azure Marketplace credentials. #
+my $clientid = "";
+my $clientsecret = "";
+
+#       ****DEPRECATED****            #
+#  Your Bing App ID                   #
 my $appid   = "";
 
-# Default language              #
+# Default language                    #
 my $lang = "en";
 
-# Output audio sample rate      #
+# Output audio sample rate            #
 my $samplerate = 8000;
 
-# Use of cache mechanism        #
+# Use of cache mechanism              #
 my $usecache = 1;
 
-# Cache directory path          #
+# Cache directory path                #
 my $cachedir = "/tmp";
 
-# Verbose debugging messages    #
+# Verbose debugging messages          #
 my $debug = 0;
 
-# ----------------------------- #
+# ----------------------------------- #
 
 my %AGI;
 my $text;
@@ -73,6 +85,7 @@ my $format    = "audio/wav";
 my $intkey    = "";
 my $tmpdir    = "/tmp";
 my $maxlen    = 2048;
+my $timeout   = 10;
 my $url       = "http://api.microsofttranslator.com/V2/Http.svc";
 my $sox       = `/usr/bin/which sox`;
 
@@ -91,7 +104,8 @@ $name = " -- $AGI{request}:";
 #	warn "$name $_ = $AGI{$_}\n" foreach (sort keys %AGI);
 #}
 
-# Abort if there is not API key. #
+# Get access token if no AppID is defined #
+$appid = get_access_token() if (!$appid);
 die "$name No API key found. Aborting.\n" if (!$appid);
 
 # Abort if required programs not found. #
@@ -162,9 +176,8 @@ if ($usecache) {
 
 # Synthesize speech using MS Translator API #
 my $ua = LWP::UserAgent->new;
-$ua->agent("Mozilla/5.0 (X11; Linux; rv:8.0) Gecko/20100101");
 $ua->env_proxy;
-$ua->timeout(5);
+$ua->timeout($timeout);
 $text = escape($text);
 
 # Hnadle interrupts #
@@ -194,6 +207,28 @@ if ($usecache) {
 }
 unlink glob "$tmpname*";
 exit;
+
+sub get_access_token {
+# Obtaining an Access Token #
+	my $ua = LWP::UserAgent->new(ssl_opts => {verify_hostname => 1});
+	$ua->timeout($timeout);
+	my $response = $ua->post(
+		"https://datamarket.accesscontrol.windows.net/v2/OAuth2-13/",
+		[
+			client_id     => $clientid,
+			client_secret => $clientsecret,
+			scope         => 'http://api.microsofttranslator.com',
+			grant_type    => 'client_credentials',
+		],
+	);
+	if ($response->is_success) {
+		$response->content =~ /^\{"access_token":"(.*?)","token_type":".*"\}$/;
+		my $token = escape("Bearer $1");
+		return("$token");
+	} else {
+		die "$name Failed to get Access Token.\n";
+	}
+}
 
 sub checkresponse {
 	my $input = <STDIN>;

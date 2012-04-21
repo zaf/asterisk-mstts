@@ -12,8 +12,13 @@ Requirements
 Perl         The Perl Programming Language
 perl-libwww  The World-Wide Web library for Perl
 sox          Sound eXchange, sound processing program
-API Key (appid) from http://www.bing.com/developers/appids.aspx
 Internet access in order to contact MS and get the voice data.
+
+To use this script you have to subscribe to the Microsoft Translator API on Azure Marketplace:
+https://datamarket.azure.com/developer/applications/
+
+Existing API Keys from http://www.bing.com/developers/appids.aspx
+still work but they are considered deprecated and this method is no longer supported.
 
 ------------
 Installation
@@ -93,3 +98,8 @@ License
 -------
 The MStts script for asterisk is distributed under the GNU General Public
 License v2. See COPYING for details.
+
+--------
+Homepage
+--------
+http://zaf.github.com/asterisk-mstts/
