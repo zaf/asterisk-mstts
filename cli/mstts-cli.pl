@@ -32,7 +32,7 @@ my $clientid = "";
 my $clientsecret = "";
 
 #         ****DEPRECATED****              #
-# Here you can assign your App ID from MS #
+# Here you can assign your Bing App ID    #
 my $appid   = "";
 #         ****DEPRECATED****              #
 # --------------------------------------- #
@@ -46,13 +46,13 @@ my @soxargs;
 my $lang    = "en";
 my $format  = "audio/wav";
 my $tmpdir  = "/tmp";
-my $timeout = 10;
+my $timeout = 15;
 my $url     = "http://api.microsofttranslator.com/V2/Http.svc";
 my $sox     = `/usr/bin/which sox`;
 
 VERSION_MESSAGE() if (!@ARGV);
 
-getopts('o:l:t:r:f:i:hqv', \%options);
+getopts('o:l:t:r:f:c:i:hqv', \%options);
 
 # Dislpay help messages #
 VERSION_MESSAGE() if (defined $options{h});
@@ -64,12 +64,13 @@ if (!$sox) {
 chomp($sox);
 
 $appid = $options{i} if (defined $options{i});
+($clientid, $clientsecret) = split(/:/, $options{c}, 2) if (defined $options{c});
 $appid = get_access_token() if (!$appid);
+
 if (!$appid) {
-	say_msg("You must have a client ID from Azure Market place or an App ID from Microsoft to use this script.");
+	say_msg("You must have a client ID from Azure Marketplace or a Bing AppID to use this script.");
 	exit 1;
 }
-$appid = escape($appid);
 
 lang_list() if (defined $options{v});
 
@@ -120,7 +121,6 @@ for ($input) {
 }
 
 my $ua = LWP::UserAgent->new;
-$ua->agent("Mozilla/5.0 (X11; Linux; rv:8.0) Gecko/20100101");
 $ua->env_proxy;
 $ua->timeout($timeout);
 
@@ -131,7 +131,7 @@ $ua->timeout($timeout);
 	UNLINK => 1,
 );
 my $request = HTTP::Request->new(
-	'GET' => "$url/Speak?text=$input&language=$lang&format=$format&options=MaxQuality&appid=$appid"
+	'GET' => "$url/Speak?appid=$appid&text=$input&language=$lang&format=$format&options=MaxQuality"
 );
 my $response = $ua->request($request, $tmpname);
 if (!$response->is_success) {
@@ -156,23 +156,21 @@ exit 0;
 
 sub get_access_token {
 # Obtaining an Access Token #
-	my $authurl = "https://datamarket.accesscontrol.windows.net/v2/OAuth2-13/";
 	my $ua = LWP::UserAgent->new(ssl_opts => {verify_hostname => 1});
-	$ua->agent("Mozilla/5.0 (X11; Linux; rv:8.0) Gecko/20100101");
 	$ua->timeout($timeout);
 	my $response = $ua->post(
-		$authurl,
+		"https://datamarket.accesscontrol.windows.net/v2/OAuth2-13/",
 		[
-			client_id => $clientid,
+			client_id     => $clientid,
 			client_secret => $clientsecret,
-			scope => 'http://api.microsofttranslator.com',
-			grant_type => 'client_credentials',
+			scope         => 'http://api.microsofttranslator.com',
+			grant_type    => 'client_credentials',
 		],
 	);
 	if ($response->is_success) {
 		$response->content =~ /^\{"access_token":"(.*?)","token_type":".*"\}$/;
-		my $token = "$1";
-		return("Bearer $token");
+		my $token = escape("Bearer $1");
+		return("$token");
 	} else {
 		say_msg("Failed to get Access Token.");
 		return("");
@@ -182,7 +180,7 @@ sub get_access_token {
 sub lang_list {
 # Display the list of supported languages #
 	my $ua = LWP::UserAgent->new;
-	$ua->agent("Mozilla/5.0 (X11; Linux; rv:8.0) Gecko/20100101");
+	$ua->env_proxy;
 	$ua->timeout($timeout);
 	my $request = HTTP::Request->new('GET' => "$url/GetLanguagesForSpeak?appid=$appid");
 	my $response = $ua->request($request);
@@ -197,21 +195,27 @@ sub lang_list {
 
 sub say_msg {
 # Print messages to user if 'quiet' flag is not set #
-	my $message = shift;
-	warn "$0: $message" if (!defined $options{q});
+	my @message = @_;
+	warn @message if (!defined $options{q});
 	return;
 }
 
 sub VERSION_MESSAGE {
 # Help message #
 	print "Text to speech synthesis using Microsoft Translator API.\n\n",
+		"In order to use this script you have to subscribe to the Microsoft\n",
+		"Translator API on Azure Marketplace:\n",
+		"https://datamarket.azure.com/developer/applications/\n",
+		"Existing API Keys from http://www.bing.com/developers/appids.aspx\n",
+		"still work but they are considered deprecated and this method is no longer supported.\n\n",
 		 "Supported options:\n",
 		 " -t <text>      text string to synthesize\n",
 		 " -f <file>      text file to synthesize\n",
 		 " -l <lang>      specify the language to use, defaults to 'en' (English)\n",
 		 " -r <rate>      specify the output sampling rate in Hertz (default 16000)\n",
 		 " -o <filename>  save output as file\n",
-		 " -i <appID>     set the App ID from MS\n",
+		 " -c <clientid>  set the Azure marketplace credentials (clientid:clientsecret)\n",
+		 " -i <appID>     set the Bing App ID\n",
 		 " -q             quiet (Don't print any messages or warnings)\n",
 		 " -h             this help message\n",
 		 " -v             suppoted languages list\n\n",
