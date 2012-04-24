@@ -44,6 +44,7 @@ my $samplerate;
 my @soxargs;
 my $lang    = "en";
 my $format  = "audio/wav";
+my $speed   = 1;
 my $tmpdir  = "/tmp";
 my $timeout = 15;
 my $url     = "http://api.microsofttranslator.com/V2/Http.svc";
@@ -51,7 +52,7 @@ my $sox     = `/usr/bin/which sox`;
 
 VERSION_MESSAGE() if (!@ARGV);
 
-getopts('o:l:t:r:f:c:i:hqv', \%options);
+getopts('o:l:t:r:f:s:c:i:hqv', \%options);
 
 # Dislpay help messages #
 VERSION_MESSAGE() if (defined $options{h});
@@ -89,6 +90,15 @@ if (defined $options{r}) {
 		$samplerate = $options{r};
 	} else {
 		say_msg("Invalid sample rate, using default.");
+	}
+}
+
+if (defined $options{s}) {
+# set speed factor #
+	if ($options{s} =~ /\d+/) {
+		$speed = $options{s};
+	} else {
+		say_msg("Invalind speed factor, using default.");
 	}
 }
 
@@ -145,6 +155,7 @@ if (defined $options{o}) {
 } else {
 	@soxargs = ($sox, "-q", $tmpname, "-t", "alsa", "-d");
 }
+push(@soxargs, ("tempo", "-s", $speed)) if ($speed != 1);
 
 if (system(@soxargs)) {
 	say_msg("sox failed to process sound file.");
@@ -213,6 +224,7 @@ sub VERSION_MESSAGE {
 		 " -l <lang>      specify the language to use, defaults to 'en' (English)\n",
 		 " -r <rate>      specify the output sampling rate in Hertz (default 16000)\n",
 		 " -o <filename>  save output as file\n",
+		 " -s <factor>    specify the speech rate speed factor (default 1.0)\n",
 		 " -c <clientid>  set the Azure marketplace credentials (clientid:clientsecret)\n",
 		 " -i <appID>     set the Bing App ID\n",
 		 " -q             quiet (Don't print any messages or warnings)\n",
