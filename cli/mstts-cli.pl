@@ -27,12 +27,12 @@ use LWP::UserAgent;
 # --------------------------------------- #
 # Here you can assing your client ID and  #
 # client secret from Azure Marketplace.   #
-my $clientid = "";
+my $clientid     = "";
 my $clientsecret = "";
 
 #         ****DEPRECATED****              #
 # Here you can assign your Bing App ID    #
-my $appid   = "";
+my $appid = "";
 #         ****DEPRECATED****              #
 # --------------------------------------- #
 
@@ -44,6 +44,7 @@ my $samplerate;
 my @soxargs;
 my $lang    = "en";
 my $format  = "audio/wav";
+my $level   = -3;
 my $speed   = 1;
 my $tmpdir  = "/tmp";
 my $timeout = 15;
@@ -52,7 +53,7 @@ my $sox     = `/usr/bin/which sox`;
 
 VERSION_MESSAGE() if (!@ARGV);
 
-getopts('o:l:t:r:f:s:c:i:hqv', \%options);
+getopts('o:l:t:r:f:n:s:c:i:hqv', \%options);
 
 # Dislpay help messages #
 VERSION_MESSAGE() if (defined $options{h});
@@ -74,49 +75,7 @@ if (!$appid) {
 
 lang_list() if (defined $options{v});
 
-if (defined $options{l}) {
-# check if language setting is valid #
-	if ($options{l} =~ /\w+/) {
-		$lang = $options{l};
-	} else {
-		say_msg("Invalid language setting. Aborting.");
-		exit 1;
-	}
-}
-
-if (defined $options{r}) {
-# set audio sample rate #
-	if ($options{r} =~ /\d+/) {
-		$samplerate = $options{r};
-	} else {
-		say_msg("Invalid sample rate, using default.");
-	}
-}
-
-if (defined $options{s}) {
-# set speed factor #
-	if ($options{s} =~ /\d+/) {
-		$speed = $options{s};
-	} else {
-		say_msg("Invalind speed factor, using default.");
-	}
-}
-
-# Get input text #
-if (defined $options{t}) {
-	$input = $options{t};
-} elsif (defined $options{f}) {
-	if (open(my $fh, "<", "$options{f}")) {
-		$input = do { local $/; <$fh> };
-		close($fh);
-	} else {
-		say_msg("Cant read file $options{f}");
-		exit 1;
-	}
-} else {
-	say_msg("No text passed for synthesis.");
-	exit 1;
-}
+parse_options();
 
 for ($input) {
 	s/[\\|*~<>^\n\(\)\[\]\{\}[:cntrl:]]/ /g;
@@ -149,13 +108,10 @@ if (!$response->is_success) {
 }
 
 # Set sox args and process wav file #
-if (defined $options{o}) {
-	@soxargs = ($sox, "-q", $tmpname, $options{o});
-	push(@soxargs, ("rate", $samplerate)) if ($samplerate);
-} else {
-	@soxargs = ($sox, "-q", $tmpname, "-t", "alsa", "-d");
-}
+@soxargs = ($sox, "-q", "--norm=$level", $tmpname);
+defined $options{o} ? push(@soxargs, ($options{o})) : push(@soxargs, ("-t", "alsa", "-d"));
 push(@soxargs, ("tempo", "-s", $speed)) if ($speed != 1);
+push(@soxargs, ("rate", $samplerate)) if ($samplerate);
 
 if (system(@soxargs)) {
 	say_msg("sox failed to process sound file.");
@@ -165,7 +121,7 @@ if (system(@soxargs)) {
 exit 0;
 
 sub get_access_token {
-# Obtaining an Access Token #
+	# Obtaining an Access Token #
 	my $ua = LWP::UserAgent->new(ssl_opts => {verify_hostname => 1});
 	$ua->timeout($timeout);
 	my $response = $ua->post(
@@ -187,8 +143,47 @@ sub get_access_token {
 	}
 }
 
+sub parse_options {
+	# Get input text #
+	if (defined $options{t}) {
+		$input = $options{t};
+	} elsif (defined $options{f}) {
+		if (open(my $fh, "<", "$options{f}")) {
+			$input = do { local $/; <$fh> };
+			close($fh);
+		} else {
+			say_msg("Cant read file $options{f}");
+			exit 1;
+		}
+	} else {
+		say_msg("No text passed for synthesis.");
+		exit 1;
+	}
+	# check if language setting is valid #
+	if (defined $options{l}) {
+		$options{l} =~ /^[a-zA-Z]{2}(-[a-zA-Z]{2,3})?$/ ? $lang = $options{l}
+			: say_msg("Invalid language setting, using default.");
+	}
+	# set audio sample rate #
+	if (defined $options{r}) {
+		$options{r} =~ /\d+/ ? $samplerate = $options{r}
+			: say_msg("Invalid sample rate, using default.");
+	}
+	# set speed factor #
+	if (defined $options{s}) {
+		$options{s} =~ /\d+/ ? $speed = $options{s}
+			: say_msg("Invalind speed factor, using default.");
+	}
+	# set the audio normalisation level #
+	if (defined $options{n}) {
+		$options{n} =~ /\d+/ ? $level = $options{n}
+			: say_msg("Invalind normalisation level, using default.");
+	}
+	return;
+}
+
 sub lang_list {
-# Display the list of supported languages #
+	# Display the list of supported languages #
 	my $ua = LWP::UserAgent->new;
 	$ua->env_proxy;
 	$ua->timeout($timeout);
@@ -204,34 +199,35 @@ sub lang_list {
 }
 
 sub say_msg {
-# Print messages to user if 'quiet' flag is not set #
+	# Print messages to user if 'quiet' flag is not set #
 	my @message = @_;
 	warn @message if (!defined $options{q});
 	return;
 }
 
 sub VERSION_MESSAGE {
-# Help message #
+	# Help message #
 	print "Text to speech synthesis using Microsoft Translator API.\n\n",
 		"In order to use this script you have to subscribe to the Microsoft\n",
 		"Translator API on Azure Marketplace:\n",
 		"https://datamarket.azure.com/developer/applications/\n",
 		"Existing API Keys from http://www.bing.com/developers/appids.aspx\n",
 		"still work but they are considered deprecated and this method is no longer supported.\n\n",
-		 "Supported options:\n",
-		 " -t <text>      text string to synthesize\n",
-		 " -f <file>      text file to synthesize\n",
-		 " -l <lang>      specify the language to use, defaults to 'en' (English)\n",
-		 " -r <rate>      specify the output sampling rate in Hertz (default 16000)\n",
-		 " -o <filename>  save output as file\n",
-		 " -s <factor>    specify the speech rate speed factor (default 1.0)\n",
-		 " -c <clientid>  set the Azure marketplace credentials (clientid:clientsecret)\n",
-		 " -i <appID>     set the Bing App ID\n",
-		 " -q             quiet (Don't print any messages or warnings)\n",
-		 " -h             this help message\n",
-		 " -v             suppoted languages list\n\n",
-		 "Examples:\n",
-		 "$0 -l en -t \"Hello world\"\n\tHave the synthesized speech played back to the user.\n",
-		 "$0 -o hello.wav -l en -t \"Hello world\"\n\tSave the synthesized speech as a sound file.\n\n";
+		"Supported options:\n",
+		" -t <text>      text string to synthesize\n",
+		" -f <file>      text file to synthesize\n",
+		" -l <lang>      specify the language to use, defaults to 'en' (English)\n",
+		" -r <rate>      specify the output sampling rate in Hertz (default 16000)\n",
+		" -o <filename>  save output as file\n",
+		" -n <dB-level>  normalise the audio to the given level (default -3)\n",
+		" -s <factor>    specify the speech rate speed factor (default 1.0)\n",
+		" -c <clientid>  set the Azure marketplace credentials (clientid:clientsecret)\n",
+		" -i <appID>     set the Bing App ID\n",
+		" -q             quiet (Don't print any messages or warnings)\n",
+		" -h             this help message\n",
+		" -v             suppoted languages list\n\n",
+		"Examples:\n",
+		"$0 -l en -t \"Hello world\"\n\tHave the synthesized speech played back to the user.\n",
+		"$0 -o hello.wav -l en -t \"Hello world\"\n\tSave the synthesized speech as a sound file.\n\n";
 	exit 1;
 }
