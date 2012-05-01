@@ -103,3 +103,39 @@ License v2. See COPYING for details.
 Homepage
 --------
 http://zaf.github.com/asterisk-mstts/
+
+---------------
+API Description
+---------------
+
+Request
+-------
+GET    http://api.microsofttranslator.com/V2/Http.svc/Speak
+
+Parameters
+----------
+appId
+ Required. If the Authorization header is used, leave the appid field empty else
+ a string containing "Bearer" + " " + access token.
+
+text
+ Required. A string containing a sentence or sentences of the specified language to be
+ spoken for the wave stream.
+
+language
+ Required. A string representing the supported language code to speak the text in.
+ The code must be present in the list of codes returned from the method GetLanguagesForSpeak.
+
+format
+ Optional. A string specifying the content-type ID. Currently, "audio/wav" and
+ "audio/mp3" are available. The default value is "audio/wav".
+
+options
+ Optional. A string specifying the quality of the audio signals. Currently, "MaxQuality"
+ and "MinSize" are available. With "MaxQuality", you can get the voice(s) with the highest
+ quality, and with "MinSize", you can get the voices with the smallest size. If no value
+ is provided, we default to "MinSize".
+
+Response
+--------
+Returns a wave or mp3 stream of the passed-in text being spoken in the desired language.

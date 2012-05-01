@@ -43,7 +43,8 @@ my $tmpname;
 my $samplerate;
 my @soxargs;
 my $lang    = "en";
-my $format  = "audio/wav";
+my $format  = "wav";
+my $quality = "MaxQuality";
 my $level   = -3;
 my $speed   = 1;
 my $tmpdir  = "/tmp";
@@ -94,12 +95,13 @@ $ua->timeout($timeout);
 
 ($tmpfh, $tmpname) = tempfile(
 	"mstts_XXXXXX",
-	SUFFIX => ".wav",
+	SUFFIX => ".".$format,
 	DIR    => $tmpdir,
 	UNLINK => 1,
 );
-my $request = HTTP::Request->new(
-	'GET' => "$url/Speak?appid=$appid&text=$input&language=$lang&format=$format&options=MaxQuality"
+
+my $request = HTTP::Request->new('GET' =>
+	"$url/Speak?appid=$appid&text=$input&language=$lang&format=audio/$format&options=$quality"
 );
 my $response = $ua->request($request, $tmpname);
 if (!$response->is_success) {
