@@ -23,6 +23,7 @@ use Getopt::Std;
 use File::Temp qw(tempfile);
 use CGI::Util qw(escape);
 use LWP::UserAgent;
+use LWP::ConnCache;
 
 # --------------------------------------- #
 # Here you can assing your client ID and  #
@@ -38,18 +39,21 @@ my $appid = "";
 
 my %options;
 my $input;
+my @text;
 my $tmpfh;
 my $tmpname;
+my @mp3list;
 my $samplerate;
 my @soxargs;
 my $lang    = "en";
-my $format  = "wav";
+my $format  = "audio/mp3";
 my $quality = "MaxQuality";
 my $level   = -3;
 my $speed   = 1;
 my $tmpdir  = "/tmp";
 my $timeout = 15;
 my $url     = "http://api.microsofttranslator.com/V2/Http.svc";
+my $mpg123  = `/usr/bin/which mpg123`;
 my $sox     = `/usr/bin/which sox`;
 
 VERSION_MESSAGE() if (!@ARGV);
@@ -59,11 +63,11 @@ getopts('o:l:t:r:f:n:s:c:i:hqv', \%options);
 # Dislpay help messages #
 VERSION_MESSAGE() if (defined $options{h});
 
-if (!$sox) {
-	say_msg("sox is missing. Aborting.");
+if (!$mpg123 || !$sox) {
+	say_msg("mpg123 or sox is missing. Aborting.");
 	exit 1;
 }
-chomp($sox);
+chomp($mpg123, $sox);
 
 $appid = $options{i} if (defined $options{i});
 ($clientid, $clientsecret) = split(/:/, $options{c}, 2) if (defined $options{c});
@@ -79,6 +83,7 @@ lang_list() if (defined $options{v});
 parse_options();
 
 for ($input) {
+	# Split input to chunks of 1000 chars #
 	s/[\\|*~<>^\n\(\)\[\]\{\}[:cntrl:]]/ /g;
 	s/\s+/ /g;
 	s/^\s|\s$//g;
@@ -86,31 +91,54 @@ for ($input) {
 		say_msg("No text passed for synthesis.");
 		exit 1;
 	}
-	$_ = escape($_);
+	$_ .= "." unless (/^.+[.,?!:;]$/);
+	@text = /.{1,1000}[.,?!:;]|.{1,1000}\s/g;
 }
 
 my $ua = LWP::UserAgent->new;
 $ua->env_proxy;
+$ua->conn_cache(LWP::ConnCache->new());
 $ua->timeout($timeout);
 
-($tmpfh, $tmpname) = tempfile(
-	"mstts_XXXXXX",
-	SUFFIX => ".".$format,
-	DIR    => $tmpdir,
-	UNLINK => 1,
-);
+foreach my $line (@text) {
+	# Get speech data chunks and save them in temp files #
+	$line =~ s/^\s+|\s+$//g;
+	next if (length($line) == 0);
+	$line = escape($line);
 
-my $request = HTTP::Request->new('GET' =>
-	"$url/Speak?appid=$appid&text=$input&language=$lang&format=audio/$format&options=$quality"
+	($tmpfh, $tmpname) = tempfile(
+		"mstts_XXXXXX",
+		SUFFIX => ".mp3",
+		DIR    => $tmpdir,
+		UNLINK => 1,
+	);
+
+	my $request = HTTP::Request->new('GET' =>
+		"$url/Speak?appid=$appid&text=$line&language=$lang&format=$format&options=$quality"
+	);
+	my $response = $ua->request($request, $tmpname);
+	if (!$response->is_success) {
+		say_msg("Failed to fetch speech data!");
+		exit 1;
+	} else {
+		push(@mp3list, $tmpname);
+	}
+}
+
+# decode mp3s and concatenate #
+my ($wavfh, $wavname) = tempfile(
+	"mstts_XXXXXX",
+	SUFFIX => ".wav",
+	DIR    => $tmpdir,
+	UNLINK => 1
 );
-my $response = $ua->request($request, $tmpname);
-if (!$response->is_success) {
-	say_msg("Failed to fetch speech data.");
+if (system($mpg123, "-q", "-w", $wavname, @mp3list)) {
+	say_msg("mpg123 failed to process sound file.");
 	exit 1;
 }
 
 # Set sox args and process wav file #
-@soxargs = ($sox, "-q", "--norm=$level", $tmpname);
+@soxargs = ($sox, "-q", "--norm=$level", $wavname);
 defined $options{o} ? push(@soxargs, ($options{o})) : push(@soxargs, ("-t", "alsa", "-d"));
 push(@soxargs, ("tempo", "-s", $speed)) if ($speed != 1);
 push(@soxargs, ("rate", $samplerate)) if ($samplerate);

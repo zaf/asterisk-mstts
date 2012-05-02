@@ -45,6 +45,7 @@ use File::Path qw(mkpath);
 use Digest::MD5 qw(md5_hex);
 use CGI::Util qw(escape);
 use LWP::UserAgent;
+use LWP::ConnCache;
 $| = 1;
 
 # ----------------------------------- #
@@ -76,18 +77,22 @@ my $debug = 0;
 # ----------------------------------- #
 
 my %AGI;
-my $text;
+my @text;
+my $fh;
+my $tmpname;
 my $filename;
 my $fexten;
 my @result;
 my $name;
-my $format    = "audio/wav";
+my $format    = "audio/mp3";
+my $quality   = "MaxQuality";
 my $intkey    = "";
 my $tmpdir    = "/tmp";
 my $maxlen    = 2048;
 my $timeout   = 10;
 my $url       = "http://api.microsofttranslator.com/V2/Http.svc";
 my $sox       = `/usr/bin/which sox`;
+my $mpg123 = `/usr/bin/which mpg123`;
 
 # Store AGI input #
 while (<STDIN>) {
@@ -109,10 +114,10 @@ $appid = get_access_token() if (!$appid);
 die "$name No API key found. Aborting.\n" if (!$appid);
 
 # Abort if required programs not found. #
-die "$name sox is missing. Aborting.\n" if (!$sox);
+die "$name sox or mpg123 is missing. Aborting.\n" if (!$sox || !$mpg123);
 
-chomp($sox);
-warn "$name Found sox in: $sox\n" if ($debug);
+chomp($sox, $mpg123);
+warn "$name Found sox in: $sox, mpg123 in: $mpg123\n" if ($debug);
 
 # Sanitising input #
 for ($AGI{arg_1}) {
@@ -120,7 +125,8 @@ for ($AGI{arg_1}) {
 	s/\s+/ /g;
 	s/^\s|\s$//g;
 	die "$name No text passed for synthesis.\n" if (!length);
-	$text = $_;
+	$_ .= "." unless (/^.+[.,?!:;]$/);
+	@text = /.{1,1000}[.,?!:;]|.{1,1000}\s/g;
 }
 
 # Setting language and interrupt keys #
@@ -138,9 +144,9 @@ if (length($AGI{arg_3})) {
 
 # Setting filename extension according to sample rate. #
 if ($samplerate == 16000) {
-	$fexten = "wav16";
+	$fexten = "sln16";
 } else {
-	$fexten     = "wav";
+	$fexten     = "sln";
 	$samplerate = 8000;
 }
 
@@ -158,54 +164,64 @@ if ($result[0] == 4) {
 	checkresponse();
 }
 
-if ($debug) {
-	warn "$name Text passed for synthesis: $text\n",
-		"$name Language: $lang, Interrupt keys: $intkey, Sample rate: $samplerate\n",
-		"$name Caching: $usecache, Cache dir: $cachedir\n";
-}
-
-if ($usecache) {
-	$filename = md5_hex($text);
-	# Stream file from cache if it exists #
-	if (-r "$cachedir/$filename.$fexten") {
-		warn "$name File already in cache.\n" if ($debug);
-		playback("$cachedir/$filename", $intkey);
-		exit;
-	}
-}
-
 # Synthesize speech using MS Translator API #
 my $ua = LWP::UserAgent->new;
 $ua->env_proxy;
+$ua->conn_cache(LWP::ConnCache->new());
 $ua->timeout($timeout);
-$text = escape($text);
 
-# Hnadle interrupts #
-$SIG{'INT'} = \&int_handler;
-$SIG{'HUP'} = \&int_handler;
+foreach my $line (@text) {
+	$line =~ s/^\s+|\s+$//g;
+	next if (length($line) == 0);
+	if ($debug) {
+		warn "$name Text passed for synthesis: $line\n",
+			"$name Language: $lang, Interrupt keys: $intkey, Sample rate: $samplerate\n",
+			"$name Caching: $usecache, Cache dir: $cachedir\n";
+	}
+	if ($usecache) {
+		$filename = md5_hex($line);
+		# Stream file from cache if it exists #
+		if (-r "$cachedir/$filename.$fexten") {
+			warn "$name File already in cache.\n" if ($debug);
+			my $res = playback("$cachedir/$filename", $intkey);
+			last if ($res > 0);
+			next;
+		}
+	}
+	$line = escape($line);
 
-my ($tmpfh, $tmpname) = tempfile("mstts_XXXXXX", DIR => $tmpdir, UNLINK => 1);
-my $request = HTTP::Request->new(
-	'GET' => "$url/Speak?text=$text&language=$lang&format=$format&options=MaxQuality&appid=$appid"
-);
-my $response = $ua->request($request, $tmpname);
-die "$name Failed to fetch file.\n" if (!$response->is_success);
+	# Hnadle interrupts #
+	$SIG{'INT'} = \&int_handler;
+	$SIG{'HUP'} = \&int_handler;
 
-# Resample file if needed #
-if ($samplerate != 16000) {
-	system($sox, $tmpname, "-q", "-r", $samplerate, "$tmpname.$fexten");
-} else {
-	move($tmpname, "$tmpname.$fexten");
+	($fh, $tmpname) = tempfile("mstts_XXXXXX", DIR => $tmpdir, UNLINK => 1);
+
+	my $ua_request = HTTP::Request->new('GET' =>
+		"$url/Speak?text=$line&language=$lang&format=$format&options=$quality&appid=$appid"
+	);
+
+	my $ua_response = $ua->request($ua_request, $tmpname);
+
+	die "$name Failed to fetch file.\n" unless ($ua_response->is_success);
+
+	# Convert mp3 file to 16bit 8Khz or 16kHz mono raw #
+	system($mpg123, "-q", "-w", "$tmpname.wav", $tmpname) == 0
+		or die "$name $mpg123 failed: $?\n";
+	system($sox, "$tmpname.wav", "-q", "-r", $samplerate, "-t", "raw", "$tmpname.$fexten") == 0
+		or die "$name $sox failed: $?\n";
+	unlink "$tmpname.wav";
+
+	# Playback and save file in cache #
+	my $res = playback($tmpname, $intkey);
+	if ($usecache) {
+		mkpath("$cachedir") unless (-d "$cachedir");
+		warn "$name Saving file $filename to cache\n" if ($debug);
+		move("$tmpname.$fexten", "$cachedir/$filename.$fexten");
+	} else {
+		unlink "$tmpname.$fexten";
+	}
+	last if ($res > 0);
 }
-
-# Play back to the user and save in cache #
-playback($tmpname, $intkey);
-if ($usecache) {
-	mkpath("$cachedir") unless (-d "$cachedir");
-	warn "$name Saving file $filename to cache\n" if ($debug);
-	move("$tmpname.$fexten", "$cachedir/$filename.$fexten");
-}
-unlink glob "$tmpname*";
 exit;
 
 sub get_access_token {
