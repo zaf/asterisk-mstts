@@ -12,11 +12,12 @@
 # -----
 # Usage
 # -----
-# agi(mstts.agi,"text",[language],[intkey]): This will invoke the Microsoft TTS engine,
-# render the text string to speech and play it back to the user. If 'intkey' is set the
-# script will wait for user input. Any given interrupt keys will cause the playback
-# to immediately terminate and the dialplan to proceed to the matching extension
-# (this is mainly for use in IVR, see README for examples).
+# agi(mstts.agi,"text",[language],[intkey],[speed]): This will invoke the Microsoft TTS
+# engine, render the text string to speech and play it back to the user.
+# If 'intkey' is set the script will wait for user input. Any given interrupt keys will
+# cause the playback to immediately terminate and the dialplan to proceed to the
+# matching extension (this is mainly for use in IVR, see README for examples).
+# If 'speed' is set the speech rate is altered by that factor.
 #
 # The script contacts Microsoft Translate TTS service in order to get the voice data
 # which then stores in a local cache (by default /tmp/) for future use.
@@ -33,8 +34,10 @@
 # can be set up by altering the following variables:
 # Default langeuage: $lang
 # Sample rate:       $samplerate
+# Speed factor:      $speed
 # Chace:             $usecache
 # Chache directory:  $cachedir
+# SoX Version:       $sox_ver
 #
 
 use warnings;
@@ -62,14 +65,22 @@ my $appid   = "";
 # Default language                    #
 my $lang = "en";
 
+# Output speed factor                 #
+my $speed = 1;
+
 # Output audio sample rate            #
-my $samplerate = 0;
+# Leave blank to auto-detect          #
+my $samplerate = "";
 
 # Use of cache mechanism              #
 my $usecache = 1;
 
 # Cache directory path                #
 my $cachedir = "/tmp";
+
+# SoX Version                         #
+# Leave blank to auto-detect          #
+my $sox_ver = "";
 
 # Verbose debugging messages          #
 my $debug = 0;
@@ -100,7 +111,7 @@ while (<STDIN>) {
 	last if (!length);
 	$AGI{$1} = $2 if (/^agi_(\w+)\:\s+(.*)$/);
 }
-($AGI{arg_1}, $AGI{arg_2}, $AGI{arg_3}) = @ARGV;
+($AGI{arg_1}, $AGI{arg_2}, $AGI{arg_3}, $AGI{arg_4}) = @ARGV;
 
 $name = " -- $AGI{request}:";
 
@@ -117,7 +128,11 @@ die "$name No API key found. Aborting.\n" if (!$appid);
 die "$name sox or mpg123 is missing. Aborting.\n" if (!$sox || !$mpg123);
 
 chomp($sox, $mpg123);
-warn "$name Found sox in: $sox, mpg123 in: $mpg123\n" if ($debug);
+# Detect sox version #
+if (!$sox_ver) {
+	$sox_ver = (system("$sox --version > /dev/null 2>&1") == 0) ? 14 : 12;
+}
+warn "$name Found sox version $sox_ver in: $sox, mpg123 in: $mpg123\n" if ($debug);
 
 # Sanitising input #
 for ($AGI{arg_1}) {
@@ -129,7 +144,7 @@ for ($AGI{arg_1}) {
 	@text = /.{1,1000}[.,?!:;]|.{1,1000}\s/g;
 }
 
-# Setting language and interrupt keys #
+# Setting language, interrupt keys and speed rate #
 if (length($AGI{arg_2})) {
 	if ($AGI{arg_2} =~ /[a-z]{2}(-[a-z]{2,3})?/) {
 		$lang = $AGI{arg_2};
@@ -140,6 +155,9 @@ if (length($AGI{arg_2})) {
 if (length($AGI{arg_3})) {
 	$intkey = "0123456789#*" if ($AGI{arg_3} eq "any");
 	$intkey = $AGI{arg_3} if ($AGI{arg_3} =~ /^[0-9*#]+$/);
+}
+if (length($AGI{arg_4})) {
+	$speed = $AGI{arg_4} if ($AGI{arg_4} =~ /^\d+(\.\d+)?$/);
 }
 
 # Check cache path size: dir length + md5 + file extension #
@@ -157,7 +175,7 @@ if ($result[0] == 4) {
 }
 
 # Setting filename extension according to sample rate. #
-if    ($samplerate == 0)     { ($fexten, $samplerate) = detect_format(); }
+if    (!$samplerate)         { ($fexten, $samplerate) = detect_format(); }
 elsif ($samplerate == 12000) { $fexten = "sln12"; }
 elsif ($samplerate == 16000) { $fexten = "sln16"; }
 elsif ($samplerate == 32000) { $fexten = "sln32"; }
@@ -177,10 +195,10 @@ foreach my $line (@text) {
 	if ($debug) {
 		warn "$name Text passed for synthesis: $line\n",
 			"$name Language: $lang, Interrupt keys: $intkey, Sample rate: $samplerate\n",
-			"$name Caching: $usecache, Cache dir: $cachedir\n";
+			"$name Speed: $speed, Caching: $usecache, Cache dir: $cachedir\n";
 	}
 	if ($usecache) {
-		$filename = md5_hex($line);
+		$filename = md5_hex("$line.$speed");
 		# Stream file from cache if it exists #
 		if (-r "$cachedir/$filename.$fexten") {
 			warn "$name File already in cache.\n" if ($debug);
@@ -208,8 +226,16 @@ foreach my $line (@text) {
 	# Convert mp3 file to 16bit mono raw #
 	system($mpg123, "-q", "-w", "$tmpname.wav", $tmpname) == 0
 		or die "$name $mpg123 failed: $?\n";
-	system($sox, "$tmpname.wav", "-q", "-r", $samplerate, "-t", "raw", "$tmpname.$fexten") == 0
-		or die "$name $sox failed: $?\n";
+
+	my @soxargs = (
+		$sox, "$tmpname.wav", "-q", "-r", $samplerate, "-t", "raw", "$tmpname.$fexten"
+	);
+	if ($sox_ver >= 14) {
+		push(@soxargs, ("tempo", "-s", $speed)) if ($speed != 1);
+	} else {
+		push(@soxargs, ("stretch", 1/$speed, "200")) if ($speed != 1);
+	}
+	system(@soxargs) == 0 or die "$name $sox failed: $?\n";
 	unlink "$tmpname.wav";
 
 	# Playback and save file in cache #
