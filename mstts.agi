@@ -25,10 +25,8 @@
 # In order to use this script you have to subscribe to the Microsoft
 # Translator API on Azure Marketplace:
 # https://datamarket.azure.com/developer/applications/
-#
-# Existing API Keys from http://www.bing.com/developers/appids.aspx
-# still work but they are considered deprecated and this method
-# is no longer supported.
+# and register your application with Azure DataMarket:
+# https://datamarket.azure.com/developer/applications/
 #
 # Parameters like default language, sample rate, caching and cache dir
 # can be set up by altering the following variables:
@@ -58,10 +56,6 @@ $| = 1;
 my $clientid = "";
 my $clientsecret = "";
 
-#       ****DEPRECATED****            #
-#  Your Bing App ID                   #
-my $appid   = "";
-
 # Default language                    #
 my $lang = "en";
 
@@ -80,7 +74,7 @@ my $samplerate = "";
 
 # SoX Version                         #
 # Leave blank to auto-detect          #
-my $sox_ver = "";
+my $sox_ver = 12;
 
 # Verbose debugging messages          #
 my $debug = 0;
@@ -95,6 +89,7 @@ my $filename;
 my $fexten;
 my @result;
 my $name;
+my $atoken;
 my $format    = "audio/mp3";
 my $quality   = "MaxQuality";
 my $intkey    = "";
@@ -198,9 +193,9 @@ foreach my $line (@text) {
 			next;
 		}
 	}
-	# Get access token if no AppID is defined #
-	$appid = get_access_token() if (!$appid);
-	die "$name No API key found. Aborting.\n" if (!$appid);
+	# Get access token #
+	$atoken = get_access_token() if (!$atoken);
+	die "$name No API key found. Aborting.\n" if (!$atoken);
 
 	$line = escape($line);
 
@@ -211,7 +206,7 @@ foreach my $line (@text) {
 	($fh, $tmpname) = tempfile("mstts_XXXXXX", DIR => $tmpdir, UNLINK => 1);
 
 	my $ua_request = HTTP::Request->new('GET' =>
-		"$url/Speak?text=$line&language=$lang&format=$format&options=$quality&appid=$appid"
+		"$url/Speak?text=$line&language=$lang&format=$format&options=$quality&appid=$atoken"
 	);
 
 	my $ua_response = $ua->request($ua_request, $tmpname);
@@ -253,7 +248,7 @@ sub get_access_token {
 		],
 	);
 	if ($response->is_success) {
-		$response->content =~ /^\{"access_token":"(.*?)","token_type":".*"\}$/;
+		$response->content =~ /^\{"token_type":".*","access_token":"(.*?)","expires_in":".*","scope":".*"\}$/;
 		my $token = escape("Bearer $1");
 		return $token;
 	} else {
@@ -324,10 +319,12 @@ sub get_sox_args {
 	my ($source_file, $dest_file) = @_;
 
 	my @soxargs = ($sox, $source_file, "-q", "-r", $samplerate, "-t", "raw", $dest_file);
-	if ($sox_ver >= 14) {
-		push(@soxargs, ("tempo", "-s", $speed)) if ($speed != 1);
-	} else {
-		push(@soxargs, ("stretch", 1/$speed, "80")) if ($speed != 1);
+	if ($speed != 1) {
+		if ($sox_ver >= 14) {
+			push(@soxargs, ("tempo", "-s", $speed));
+		} else {
+			push(@soxargs, ("stretch", 1/$speed, "80")) if ($speed != 1);
+		}
 	}
 	return @soxargs;
 }

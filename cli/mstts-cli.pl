@@ -3,18 +3,16 @@
 #
 # Script that uses Microsoft Translator for text to speech synthesis.
 #
-# In order to use this script you have to subscribe to the Microsoft
-# Translator API on Azure Marketplace:
-# https://datamarket.azure.com/developer/applications/
-#
-# Existing API Keys from http://www.bing.com/developers/appids.aspx
-# still work but they are considered deprecated and this method
-# is no longer supported.
-#
 # Copyright (C) 2012, Lefteris Zafiris <zaf.000@gmail.com>
 #
 # This program is free software, distributed under the terms of
 # the GNU General Public License Version 2.
+#
+# In order to use this script you have to subscribe to the Microsoft
+# Translator API on Azure Marketplace:
+# https://datamarket.azure.com/developer/applications/
+# and register your application with Azure DataMarket:
+# https://datamarket.azure.com/developer/applications/
 #
 
 use warnings;
@@ -30,11 +28,6 @@ use LWP::ConnCache;
 # client secret from Azure Marketplace.   #
 my $clientid     = "";
 my $clientsecret = "";
-
-#         ****DEPRECATED****              #
-# Here you can assign your Bing App ID    #
-my $appid = "";
-#         ****DEPRECATED****              #
 # --------------------------------------- #
 
 my %options;
@@ -45,6 +38,7 @@ my $tmpname;
 my @mp3list;
 my $samplerate;
 my @soxargs;
+my $atoken;
 my $lang    = "en";
 my $format  = "audio/mp3";
 my $quality = "MaxQuality";
@@ -58,7 +52,7 @@ my $sox     = `/usr/bin/which sox`;
 
 VERSION_MESSAGE() if (!@ARGV);
 
-getopts('o:l:t:r:f:n:s:c:i:hqv', \%options);
+getopts('o:l:t:r:f:n:s:c:hqv', \%options);
 
 # Dislpay help messages #
 VERSION_MESSAGE() if (defined $options{h});
@@ -69,12 +63,11 @@ if (!$mpg123 || !$sox) {
 }
 chomp($mpg123, $sox);
 
-$appid = $options{i} if (defined $options{i});
 ($clientid, $clientsecret) = split(/:/, $options{c}, 2) if (defined $options{c});
-$appid = get_access_token() if (!$appid);
+$atoken = get_access_token();
 
-if (!$appid) {
-	say_msg("You must have a client ID from Azure Marketplace or a Bing AppID to use this script.");
+if (!$atoken) {
+	say_msg("You must have a client ID from Azure Marketplace to use this script.");
 	exit 1;
 }
 
@@ -114,7 +107,7 @@ foreach my $line (@text) {
 	);
 
 	my $request = HTTP::Request->new('GET' =>
-		"$url/Speak?appid=$appid&text=$line&language=$lang&format=$format&options=$quality"
+		"$url/Speak?appid=$atoken&text=$line&language=$lang&format=$format&options=$quality"
 	);
 	my $response = $ua->request($request, $tmpname);
 	if (!$response->is_success) {
@@ -164,7 +157,7 @@ sub get_access_token {
 		],
 	);
 	if ($response->is_success) {
-		$response->content =~ /^\{"access_token":"(.*?)","token_type":".*"\}$/;
+		$response->content =~ /^\{"token_type":".*","access_token":"(.*?)","expires_in":".*","scope":".*"\}$/;
 		my $token = escape("Bearer $1");
 		return("$token");
 	} else {
@@ -217,7 +210,7 @@ sub lang_list {
 	my $ua = LWP::UserAgent->new;
 	$ua->env_proxy;
 	$ua->timeout($timeout);
-	my $request = HTTP::Request->new('GET' => "$url/GetLanguagesForSpeak?appid=$appid");
+	my $request = HTTP::Request->new('GET' => "$url/GetLanguagesForSpeak?appid=$atoken");
 	my $response = $ua->request($request);
 	if ($response->is_success) {
 		print "Supported languages list:\n",
@@ -252,7 +245,6 @@ sub VERSION_MESSAGE {
 		" -n <dB-level>  normalise the audio to the given level (default -3)\n",
 		" -s <factor>    specify the speech rate speed factor (default 1.0)\n",
 		" -c <clientid>  set the Azure marketplace credentials (clientid:clientsecret)\n",
-		" -i <appID>     set the Bing App ID\n",
 		" -q             quiet (Don't print any messages or warnings)\n",
 		" -h             this help message\n",
 		" -v             suppoted languages list\n\n",

@@ -17,9 +17,8 @@ Internet access in order to contact MS and get the voice data.
 
 To use this script you have to subscribe to the Microsoft Translator API on Azure Marketplace:
 https://datamarket.azure.com/developer/applications/
-
-Existing API Keys from http://www.bing.com/developers/appids.aspx
-still work but they are considered deprecated and this method is no longer supported.
+and register your application with Azure DataMarket:
+https://datamarket.azure.com/developer/applications/
 
 ------------
 Installation
