@@ -94,7 +94,7 @@ my $format    = "audio/mp3";
 my $quality   = "MaxQuality";
 my $intkey    = "";
 my $tmpdir    = "/tmp";
-my $maxlen    = 2048;
+my $maxlen    = 4096;
 my $timeout   = 10;
 my $url       = "http://api.microsofttranslator.com/V2/Http.svc";
 my $sox       = `/usr/bin/which sox`;
@@ -147,7 +147,9 @@ if (length($AGI{arg_4})) {
 }
 
 # Check cache path size: dir length + md5 + file extension #
-if ($usecache && ((length($cachedir) + 32 + 6) > $maxlen)) {
+if ($usecache && ((length($cachedir) + 32 + 6) < $maxlen)) {
+	mkpath("$cachedir") unless (-d "$cachedir");
+} else {
 	warn "$name Cache path size exceeds limit. Disabling cache.\n";
 	$usecache = 0;
 }
@@ -224,7 +226,6 @@ foreach my $line (@text) {
 	# Playback and save file in cache #
 	my $res = playback($tmpname, $intkey);
 	if ($usecache) {
-		mkpath("$cachedir") unless (-d "$cachedir");
 		warn "$name Saving file $filename to cache\n" if ($debug);
 		move("$tmpname.$fexten", "$cachedir/$filename.$fexten");
 	} else {
