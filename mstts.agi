@@ -40,11 +40,13 @@
 
 use warnings;
 use strict;
+use utf8;
+use Encode qw(decode encode);
 use File::Temp qw(tempfile);
 use File::Copy qw(move);
 use File::Path qw(mkpath);
 use Digest::MD5 qw(md5_hex);
-use CGI::Util qw(escape);
+use URI::Escape;
 use LWP::UserAgent;
 use LWP::ConnCache;
 $| = 1;
@@ -121,6 +123,7 @@ if (!$sox_ver) {
 warn "$name Found sox version $sox_ver in: $sox, mpg123 in: $mpg123\n" if ($debug);
 
 # Sanitising input #
+$AGI{arg_1} = decode('utf8', $AGI{arg_1});
 for ($AGI{arg_1}) {
 	s/[\\|*~<>^\(\)\[\]\{\}[:cntrl:]]/ /g;
 	s/\s+/ /g;
@@ -178,6 +181,7 @@ $ua->conn_cache(LWP::ConnCache->new());
 $ua->timeout($timeout);
 
 foreach my $line (@text) {
+	$line = encode('utf8', $line);
 	$line =~ s/^\s+|\s+$//g;
 	next if (length($line) == 0);
 	if ($debug) {
@@ -199,7 +203,7 @@ foreach my $line (@text) {
 	$atoken = get_access_token() if (!$atoken);
 	die "$name No API key found. Aborting.\n" if (!$atoken);
 
-	$line = escape($line);
+	$line = uri_escape($line);
 
 	# Hnadle interrupts #
 	$SIG{'INT'} = \&int_handler;
@@ -250,7 +254,7 @@ sub get_access_token {
 	);
 	if ($response->is_success) {
 		$response->content =~ /^\{"token_type":".*","access_token":"(.*?)","expires_in":".*","scope":".*"\}$/;
-		my $token = escape("Bearer $1");
+		my $token = uri_escape("Bearer $1");
 		return $token;
 	} else {
 		warn "$name Failed to get Access Token.\n" if ($debug);

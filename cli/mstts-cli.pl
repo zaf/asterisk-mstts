@@ -17,9 +17,11 @@
 
 use warnings;
 use strict;
+use utf8;
+use Encode qw(decode encode);
 use Getopt::Std;
 use File::Temp qw(tempfile);
-use CGI::Util qw(escape);
+use URI::Escape;
 use LWP::UserAgent;
 use LWP::ConnCache;
 
@@ -74,7 +76,7 @@ if (!$atoken) {
 lang_list() if (defined $options{v});
 
 parse_options();
-
+$input = decode('utf8', $input);
 for ($input) {
 	# Split input to chunks of 1000 chars #
 	s/[\\|*~<>^\n\(\)\[\]\{\}[:cntrl:]]/ /g;
@@ -95,9 +97,10 @@ $ua->timeout($timeout);
 
 foreach my $line (@text) {
 	# Get speech data chunks and save them in temp files #
+	$line = encode('utf8', $line);
 	$line =~ s/^\s+|\s+$//g;
 	next if (length($line) == 0);
-	$line = escape($line);
+	$line = uri_escape($line);
 
 	($tmpfh, $tmpname) = tempfile(
 		"mstts_XXXXXX",
@@ -158,7 +161,7 @@ sub get_access_token {
 	);
 	if ($response->is_success) {
 		$response->content =~ /^\{"token_type":".*","access_token":"(.*?)","expires_in":".*","scope":".*"\}$/;
-		my $token = escape("Bearer $1");
+		my $token = uri_escape("Bearer $1");
 		return("$token");
 	} else {
 		say_msg("Failed to get Access Token.");
