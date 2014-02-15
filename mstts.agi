@@ -3,7 +3,7 @@
 #
 # AGI script that uses MS Translator API for speech synthesis.
 #
-# Copyright (C) 2012, Lefteris Zafiris <zaf.000@gmail.com>
+# Copyright (C) 2012 - 2014, Lefteris Zafiris <zaf.000@gmail.com>
 #
 # This program is free software, distributed under the terms of
 # the GNU General Public License Version 2. See the COPYING file
@@ -76,7 +76,7 @@ my $samplerate = "";
 
 # SoX Version                         #
 # Leave blank to auto-detect          #
-my $sox_ver = 12;
+my $sox_ver = "";
 
 # Verbose debugging messages          #
 my $debug = 0;
@@ -328,7 +328,7 @@ sub get_sox_args {
 		if ($sox_ver >= 14) {
 			push(@soxargs, ("tempo", "-s", $speed));
 		} else {
-			push(@soxargs, ("stretch", 1/$speed, "80")) if ($speed != 1);
+			push(@soxargs, ("stretch", 1/$speed, "80"));
 		}
 	}
 	return @soxargs;
