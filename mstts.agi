@@ -176,6 +176,7 @@ else                         { ($fexten, $samplerate) =  ("sln", 8000); }
 
 # Synthesize speech using MS Translator API #
 my $ua = LWP::UserAgent->new;
+$ua->agent("Asterisk MS TTS module");
 $ua->env_proxy;
 $ua->conn_cache(LWP::ConnCache->new());
 $ua->timeout($timeout);
