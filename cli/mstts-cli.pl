@@ -41,6 +41,9 @@ my @mp3list;
 my $samplerate;
 my @soxargs;
 my $atoken;
+my $url;
+my $ua;
+my $use_ssl = 0;
 my $lang    = "en";
 my $format  = "audio/mp3";
 my $quality = "MaxQuality";
@@ -48,13 +51,13 @@ my $level   = -3;
 my $speed   = 1;
 my $tmpdir  = "/tmp";
 my $timeout = 15;
-my $url     = "http://api.microsofttranslator.com/V2/Http.svc";
+my $host    = "api.microsofttranslator.com/V2/Http.svc";
 my $mpg123  = `/usr/bin/which mpg123`;
 my $sox     = `/usr/bin/which sox`;
 
 VERSION_MESSAGE() if (!@ARGV);
 
-getopts('o:l:t:r:f:n:s:c:hqv', \%options);
+getopts('o:l:t:r:f:n:s:c:heqv', \%options);
 
 # Dislpay help messages #
 VERSION_MESSAGE() if (defined $options{h});
@@ -73,9 +76,8 @@ if (!$atoken) {
 	exit 1;
 }
 
-lang_list() if (defined $options{v});
-
 parse_options();
+
 $input = decode('utf8', $input);
 for ($input) {
 	# Split input to chunks of 1000 chars #
@@ -90,7 +92,14 @@ for ($input) {
 	@text = /.{1,1000}[.,?!:;]|.{1,1000}\s/g;
 }
 
-my $ua = LWP::UserAgent->new;
+# Initialise User angent #
+if ($use_ssl) {
+	$url = "https://" . $host;
+	$ua  = LWP::UserAgent->new(ssl_opts => {verify_hostname => 1});
+} else {
+	$url = "http://" . $host;
+	$ua  = LWP::UserAgent->new;
+}
 $ua->env_proxy;
 $ua->conn_cache(LWP::ConnCache->new());
 $ua->timeout($timeout);
@@ -148,9 +157,9 @@ exit 0;
 
 sub get_access_token {
 	# Obtaining an Access Token #
-	my $ua = LWP::UserAgent->new(ssl_opts => {verify_hostname => 1});
-	$ua->timeout($timeout);
-	my $response = $ua->post(
+	my $tk_ua = LWP::UserAgent->new(ssl_opts => {verify_hostname => 1});
+	$tk_ua->timeout($timeout);
+	my $response = $tk_ua->post(
 		"https://datamarket.accesscontrol.windows.net/v2/OAuth2-13/",
 		[
 			client_id     => $clientid,
@@ -170,6 +179,11 @@ sub get_access_token {
 }
 
 sub parse_options {
+	# set SSL encryption #
+	if (defined $options{e}) {
+		$use_ssl = 1;
+	}
+	lang_list() if (defined $options{v});
 	# Get input text #
 	if (defined $options{t}) {
 		$input = $options{t};
@@ -210,7 +224,13 @@ sub parse_options {
 
 sub lang_list {
 	# Display the list of supported languages #
-	my $ua = LWP::UserAgent->new;
+	if ($use_ssl) {
+		$url = "https://" . $host;
+		$ua  = LWP::UserAgent->new(ssl_opts => {verify_hostname => 1});
+	} else {
+		$url = "http://" . $host;
+		$ua  = LWP::UserAgent->new;
+	}
 	$ua->env_proxy;
 	$ua->timeout($timeout);
 	my $request = HTTP::Request->new('GET' => "$url/GetLanguagesForSpeak?appid=$atoken");
@@ -249,6 +269,7 @@ sub VERSION_MESSAGE {
 		" -s <factor>    specify the speech rate speed factor (default 1.0)\n",
 		" -c <clientid>  set the Azure marketplace credentials (clientid:clientsecret)\n",
 		" -q             quiet (Don't print any messages or warnings)\n",
+		" -e             use SSL for encryption\n",
 		" -h             this help message\n",
 		" -v             suppoted languages list\n\n",
 		"Examples:\n",

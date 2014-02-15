@@ -95,6 +95,13 @@ pt,     pt-br,    pt-pt, ru,
 ru-ru,  sv,       sv-se, zh-chs,
 zh-cht, zh-cn,    zh-hk, zh-tw
 
+-----------------------
+Security Considerations
+-----------------------
+This script contacts MS servers in order to get speech data.
+The script can SSL to encrypt all the traffic between your pbx and MS servers
+so no 3rd party can eavesdrop your communication.
+
 -------
 License
 -------
