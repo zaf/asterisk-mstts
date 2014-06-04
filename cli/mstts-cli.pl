@@ -169,7 +169,7 @@ sub get_access_token {
 		],
 	);
 	if ($response->is_success) {
-		$response->content =~ /^\{"token_type":".*","access_token":"(.*?)","expires_in":".*","scope":".*"\}$/;
+		$response->content =~ /^\{"token_type":".*","access_token":"(.*?)","expires_in":".*?","scope":".*?"\}$/;
 		my $token = uri_escape("Bearer $1");
 		return("$token");
 	} else {
