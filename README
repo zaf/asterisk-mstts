@@ -11,6 +11,7 @@ Requirements
 ------------
 Perl         The Perl Programming Language
 perl-libwww  The World-Wide Web library for Perl
+perl-Crypt-SSLeay or perl-IO-Socket-SSL for use of SSL/TLS encryption
 sox          Sound eXchange, sound processing program
 mpg123       MPEG Audio Player and decoder
 Internet access in order to contact MS and get the voice data.
@@ -99,7 +100,7 @@ zh-cht, zh-cn,    zh-hk, zh-tw
 Security Considerations
 -----------------------
 This script contacts MS servers in order to get speech data.
-The script can SSL to encrypt all the traffic between your pbx and MS servers
+The script uses TLS to encrypt all the traffic between your pbx and MS servers
 so no 3rd party can eavesdrop your communication.
 
 -------
