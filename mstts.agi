@@ -160,7 +160,10 @@ print "CHANNEL STATUS\n";
 @result = checkresponse();
 if ($result[0] == 4) {
 	print "ANSWER\n";
-	checkresponse();
+	@result = checkresponse();
+	if ($result[0] != 0) {
+		die "$name Failed to answer channel.\n";
+	}
 }
 
 # Setting filename extension according to sample rate. #
@@ -288,6 +291,7 @@ sub checkresponse {
 			@values = ("$1", "$2");
 		}
 	} else {
+		$input .= <STDIN> if ($input =~ /^520-Invalid/);
 		warn "$name Unexpected result: $input\n";
 		@values = (-1, -1);
 	}
