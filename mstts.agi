@@ -205,6 +205,7 @@ foreach my $line (@text) {
 			warn "$name File already in cache.\n" if ($debug);
 			my $res = playback("$cachedir/$filename", $intkey);
 			last if ($res > 0);
+			die if ($res < 0);
 			next;
 		}
 	}
@@ -243,6 +244,7 @@ foreach my $line (@text) {
 
 	# Playback and save file in cache #
 	my $res = playback($tmpname, $intkey);
+	die if ($res < 0);
 	if ($usecache) {
 		warn "$name Saving file $filename to cache\n" if ($debug);
 		move("$tmpname.$fexten", "$cachedir/$filename.$fexten");
