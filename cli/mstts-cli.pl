@@ -39,9 +39,6 @@ my @mp3list;
 my $samplerate;
 my @soxargs;
 my $atoken;
-my $url;
-my $ua;
-my $use_ssl = 0;
 my $lang    = "en";
 my $format  = "audio/mp3";
 my $quality = "MaxQuality";
@@ -49,13 +46,13 @@ my $level   = -3;
 my $speed   = 1;
 my $tmpdir  = "/tmp";
 my $timeout = 15;
-my $host    = "api.microsofttranslator.com/V2/Http.svc";
+my $url     = "https://api.microsofttranslator.com/V2/Http.svc";
 my $mpg123  = `/usr/bin/which mpg123`;
 my $sox     = `/usr/bin/which sox`;
 
 VERSION_MESSAGE() if (!@ARGV);
 
-getopts('o:l:t:r:f:n:s:c:heqv', \%options);
+getopts('o:l:t:r:f:n:s:c:hqv', \%options);
 
 # Dislpay help messages #
 VERSION_MESSAGE() if (defined $options{h});
@@ -65,6 +62,12 @@ if (!$mpg123 || !$sox) {
 	exit 1;
 }
 chomp($mpg123, $sox);
+
+# Initialise User angent #
+my $ua = LWP::UserAgent->new(ssl_opts => {verify_hostname => 1});
+$ua->env_proxy;
+$ua->conn_cache(LWP::ConnCache->new());
+$ua->timeout($timeout);
 
 ($clientid, $clientsecret) = split(/:/, $options{c}, 2) if (defined $options{c});
 $atoken = get_access_token();
@@ -89,18 +92,6 @@ for ($input) {
 	$_ .= "." unless (/^.+[.,?!:;]$/);
 	@text = /.{1,1000}[.,?!:;]|.{1,1000}\s/g;
 }
-
-# Initialise User angent #
-if ($use_ssl) {
-	$url = "https://" . $host;
-	$ua  = LWP::UserAgent->new(ssl_opts => {verify_hostname => 1});
-} else {
-	$url = "http://" . $host;
-	$ua  = LWP::UserAgent->new;
-}
-$ua->env_proxy;
-$ua->conn_cache(LWP::ConnCache->new());
-$ua->timeout($timeout);
 
 foreach my $line (@text) {
 	# Get speech data chunks and save them in temp files #
@@ -156,9 +147,7 @@ exit 0;
 sub get_access_token {
 	# Obtaining an Access Token #
 	my $token;
-	my $tk_ua = LWP::UserAgent->new(ssl_opts => {verify_hostname => 1});
-	$tk_ua->timeout($timeout);
-	my $response = $tk_ua->post(
+	my $response = $ua->post(
 		"https://datamarket.accesscontrol.windows.net/v2/OAuth2-13/",
 		[
 			client_id     => $clientid,
@@ -167,8 +156,7 @@ sub get_access_token {
 			grant_type    => 'client_credentials',
 		],
 	);
-	if ($response->is_success) {
-		$response->content =~ /^\{"token_type":".*","access_token":"(.*?)","expires_in":".*?","scope":".*?"\}$/;
+	if ($response->is_success and $response->content =~ /^\{"token_type":".+?","access_token":"(.+?)","expires_in":".+?","scope":".+?"\}$/) {
 		$token = uri_escape("Bearer $1");
 	} else {
 		say_msg("Failed to get Access Token.");
@@ -177,10 +165,6 @@ sub get_access_token {
 }
 
 sub parse_options {
-	# set SSL encryption #
-	if (defined $options{e}) {
-		$use_ssl = 1;
-	}
 	lang_list() if (defined $options{v});
 	# Get input text #
 	if (defined $options{t}) {
@@ -222,15 +206,6 @@ sub parse_options {
 
 sub lang_list {
 	# Display the list of supported languages #
-	if ($use_ssl) {
-		$url = "https://" . $host;
-		$ua  = LWP::UserAgent->new(ssl_opts => {verify_hostname => 1});
-	} else {
-		$url = "http://" . $host;
-		$ua  = LWP::UserAgent->new;
-	}
-	$ua->env_proxy;
-	$ua->timeout($timeout);
 	my $request = HTTP::Request->new('GET' => "$url/GetLanguagesForSpeak?appid=$atoken");
 	my $response = $ua->request($request);
 	if ($response->is_success) {
@@ -267,7 +242,6 @@ sub VERSION_MESSAGE {
 		" -s <factor>    specify the speech rate speed factor (default 1.0)\n",
 		" -c <clientid>  set the Azure marketplace credentials (clientid:clientsecret)\n",
 		" -q             quiet (Don't print any messages or warnings)\n",
-		" -e             use SSL for encryption\n",
 		" -h             this help message\n",
 		" -v             suppoted languages list\n\n",
 		"Examples:\n",

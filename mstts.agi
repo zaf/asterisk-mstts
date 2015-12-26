@@ -75,9 +75,6 @@ my $samplerate = "";
 # Leave blank to auto-detect          #
 my $sox_ver = "";
 
-# Use SSL for encryption              #
-my $use_ssl = 1;
-
 # Verbose debugging messages          #
 my $debug = 0;
 
@@ -91,7 +88,6 @@ my $filename;
 my $fexten;
 my @result;
 my $name;
-my $url;
 my $ua;
 my $atoken;
 my $format    = "audio/mp3";
@@ -100,7 +96,7 @@ my $intkey    = "";
 my $tmpdir    = "/tmp";
 my $maxlen    = 4096;
 my $timeout   = 10;
-my $host      = "api.microsofttranslator.com/V2/Http.svc";
+my $url       = "https://api.microsofttranslator.com/V2/Http.svc";
 my $sox       = `/usr/bin/which sox`;
 my $mpg123    = `/usr/bin/which mpg123`;
 
@@ -174,13 +170,7 @@ elsif ($samplerate == 48000) { $fexten = "sln48"; }
 else                         { ($fexten, $samplerate) =  ("sln", 8000); }
 
 # Initialise User angent #
-if ($use_ssl) {
-	$url = "https://" . $host;
-	$ua  = LWP::UserAgent->new(ssl_opts => {verify_hostname => 1});
-} else {
-	$url = "http://" . $host;
-	$ua  = LWP::UserAgent->new;
-}
+$ua = LWP::UserAgent->new(ssl_opts => {verify_hostname => 1});
 $ua->agent("Asterisk MS TTS module");
 $ua->env_proxy;
 $ua->conn_cache(LWP::ConnCache->new());
@@ -256,9 +246,7 @@ exit;
 sub get_access_token {
 # Obtaining an Access Token #
 	my $token;
-	my $tk_ua = LWP::UserAgent->new(ssl_opts => {verify_hostname => 1});
-	$tk_ua->timeout($timeout);
-	my $response = $tk_ua->post(
+	my $response = $ua->post(
 		"https://datamarket.accesscontrol.windows.net/v2/OAuth2-13/",
 		[
 			client_id     => $clientid,
@@ -267,8 +255,7 @@ sub get_access_token {
 			grant_type    => 'client_credentials',
 		],
 	);
-	if ($response->is_success) {
-		$response->content =~ /^\{"token_type":".*","access_token":"(.*?)","expires_in":".*?","scope":".*?"\}$/;
+	if ($response->is_success and $response->content =~ /^\{"token_type":".+?","access_token":"(.+?)","expires_in":".+?","scope":".+?"\}$/) {
 		$token = uri_escape("Bearer $1");
 	} else {
 		warn "$name Failed to get Access Token.\n" if ($debug);
