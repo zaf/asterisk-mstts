@@ -9,11 +9,10 @@
 # the GNU General Public License Version 2.
 #
 # In order to use this script you have to subscribe to the Microsoft
-# Translator API on Azure Marketplace:
-# https://datamarket.azure.com/developer/applications/
-# and register your application with Azure DataMarket:
+# Translator API on Azure Marketplace and register your application:
 # https://datamarket.azure.com/developer/applications/
 #
+
 
 use warnings;
 use strict;
@@ -156,6 +155,7 @@ exit 0;
 
 sub get_access_token {
 	# Obtaining an Access Token #
+	my $token;
 	my $tk_ua = LWP::UserAgent->new(ssl_opts => {verify_hostname => 1});
 	$tk_ua->timeout($timeout);
 	my $response = $tk_ua->post(
@@ -169,12 +169,11 @@ sub get_access_token {
 	);
 	if ($response->is_success) {
 		$response->content =~ /^\{"token_type":".*","access_token":"(.*?)","expires_in":".*?","scope":".*?"\}$/;
-		my $token = uri_escape("Bearer $1");
-		return("$token");
+		$token = uri_escape("Bearer $1");
 	} else {
 		say_msg("Failed to get Access Token.");
-		return("");
 	}
+	return $token;
 }
 
 sub parse_options {
