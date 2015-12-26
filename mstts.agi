@@ -251,6 +251,10 @@ sub get_access_token {
 	my $tfile = $cachedir . "/.mstts.token";
 
 	if ($usecache) {
+		if (!-e $tfile) {
+			open($fh, ">", $tfile);
+			close $fh;
+		}
 		if (open($fh, "+<", $tfile)) {
 			while (<$fh>) {
 				/^expire:(\d+)$/ and $expire = $1;
