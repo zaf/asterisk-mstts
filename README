@@ -102,6 +102,17 @@ This script contacts MS servers in order to get speech data.
 The script uses TLS to encrypt all the traffic between your pbx and MS servers
 so no 3rd party can eavesdrop your communication.
 
+------------
+Tiny version
+------------
+The '-tiny' suffixed scripts use the HTTP::Tiny perl module instead of LWP::UserAgent.
+This makes them a lot faster when run in small embedded systems or boards like
+the Raspberry pi. They can be used as an in-place replacement of the normal versions
+of the TTS scripts and expose the same interface/cli args. To use them just make sure
+you have HTTP::Tiny installed.
+In debian or ubuntu based distros: 'apt-get install libhttp-tiny-perl'
+In distros that don't have it in their repos: 'cpan HTTP::Tiny'
+
 -------
 License
 -------
