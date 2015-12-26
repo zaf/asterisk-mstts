@@ -35,6 +35,10 @@
 # Chache directory:  $cachedir
 # SoX Version:       $sox_ver
 #
+# Tiny version drops the use of mpg123 and requires MP3 format support in sox.
+# It also makes the assumption that sox is in /usr/bin/ in order
+# to skip detection and speed things up.
+#
 
 use warnings;
 use strict;
@@ -86,10 +90,8 @@ my $tmpname;
 my $filename;
 my $fexten;
 my @result;
-my $name;
 my $atoken;
-my $sox;
-my $mpg123;
+my $sox       = "/usr/bin/sox";
 my $format    = "audio/mp3";
 my $quality   = "MaxQuality";
 my $intkey    = "";
@@ -106,7 +108,7 @@ while (<STDIN>) {
 	$AGI{$1} = $2 if (/^agi_(\w+)\:\s+(.*)$/);
 }
 
-$name = " -- $AGI{request}:";
+my $name = " -- $AGI{request}:";
 
 # Sanitising input #
 $AGI{arg_1} = decode('utf8', $AGI{arg_1});
@@ -209,28 +211,8 @@ foreach my $line (@text) {
 	);
 	die "$name Failed to fetch file.\n" unless ($response->{success});
 
-	# Detect required programs #
-	if (!$sox || !$mpg123) {
-		$sox    = `/usr/bin/which sox`;
-		$mpg123 = `/usr/bin/which mpg123`;
-
-		# Abort if required programs not found. #
-		die "$name sox or mpg123 is missing. Aborting.\n" if (!$sox || !$mpg123);
-		chomp($sox, $mpg123);
-	}
-
-	# Convert mp3 file to 16bit mono raw #
-	system($mpg123, "-q", "-w", "$tmpname.wav", $tmpname) == 0
-		or die "$name $mpg123 failed: $?\n";
-
-	# Detect sox version #
-	if (!$sox_ver) {
-		$sox_ver = (system("$sox --version > /dev/null 2>&1") == 0) ? 14 : 12;
-		warn "$name Found sox version $sox_ver in: $sox, mpg123 in: $mpg123\n" if ($debug);
-	}
-	my @soxargs = get_sox_args("$tmpname.wav", "$tmpname.$fexten");
+	my @soxargs = get_sox_args($tmpname, "$tmpname.$fexten");
 	system(@soxargs) == 0 or die "$name $sox failed: $?\n";
-	unlink "$tmpname.wav";
 
 	# Playback and save file in cache #
 	my $res = playback($tmpname, $intkey);
@@ -318,10 +300,14 @@ sub detect_format {
 }
 
 sub get_sox_args {
-# Set the appropiate sox cli arguments #
 	my ($source_file, $dest_file) = @_;
-
-	my @soxargs = ($sox, $source_file, "-q", "-r", $samplerate, "-t", "raw", $dest_file);
+	# Detect sox version #
+	if (!$sox_ver) {
+		$sox_ver = (system("$sox --version > /dev/null 2>&1") == 0) ? 14 : 12;
+		warn "$name Found sox version $sox_ver in: $sox\n" if ($debug);
+	}
+	# Set the appropiate sox cli arguments #
+	my @soxargs = ($sox, "-t", "mp3", $source_file, "-q", "-r", $samplerate, "-t", "raw", $dest_file);
 	if ($speed != 1) {
 		if ($sox_ver >= 14) {
 			push(@soxargs, ("tempo", "-s", $speed));
