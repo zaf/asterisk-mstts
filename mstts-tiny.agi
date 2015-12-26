@@ -91,6 +91,7 @@ my $filename;
 my $fexten;
 my @result;
 my $atoken;
+my $http;
 my $sox       = "/usr/bin/sox";
 my $format    = "audio/mp3";
 my $quality   = "MaxQuality";
@@ -165,13 +166,6 @@ elsif ($samplerate == 44100) { $fexten = "sln44"; }
 elsif ($samplerate == 48000) { $fexten = "sln48"; }
 else                         { ($fexten, $samplerate) =  ("sln", 8000); }
 
-# Initialise User angent #
-my $http = HTTP::Tiny->new(
-	agent      => 'Asterisk MS TTS module',
-	timeout    => $timeout,
-	verify_SSL => 1,
-);
-
 # Synthesize speech using MS Translator API #
 foreach my $line (@text) {
 	$line = encode('utf8', $line);
@@ -192,6 +186,14 @@ foreach my $line (@text) {
 			die if ($res < 0);
 			next;
 		}
+	}
+	# Initialise User angent #
+	if (!$http) {
+		$http = HTTP::Tiny->new(
+			agent      => 'Asterisk MS TTS module',
+			timeout    => $timeout,
+			verify_SSL => 1,
+		);
 	}
 	# Get access token #
 	$atoken = get_access_token() if (!$atoken);
@@ -237,9 +239,7 @@ sub get_access_token {
 	if ($usecache) {
 		if (!-e $tfile) {
 			open($fh, ">", $tfile);
-			close $fh;
-		}
-		if (open($fh, "+<", $tfile)) {
+		} elsif (open($fh, "+<", $tfile)) {
 			while (<$fh>) {
 				/^expire:(\d+)$/ and $expire = $1;
 				/^token:(.+)$/ and $token = $1;
