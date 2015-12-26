@@ -230,22 +230,44 @@ exit;
 sub get_access_token {
 # Obtaining an Access Token #
 	my $token;
-	my $form_data = [
-			client_id     => $clientid,
-			client_secret => $clientsecret,
-			scope         => 'http://api.microsofttranslator.com',
-			grant_type    => 'client_credentials',
-	];
-	my $response = $http->post_form(
-		"https://datamarket.accesscontrol.windows.net/v2/OAuth2-13/",
-		$form_data,
-	);
+	my $expire;
+	my $fh;
+	my $tfile = $cachedir . "/.mstts.token";
 
-	if ($response->{success} and $response->{content} =~ /^\{"token_type":".+?","access_token":"(.+?)","expires_in":".+?","scope":".+?"\}$/) {
-		$token = uri_escape("Bearer $1");
-	} else {
-		warn "$name Failed to get Access Token.\n" if ($debug);
+	if ($usecache) {
+		if (open($fh, "+<", $tfile)) {
+			while (<$fh>) {
+				/^expire:(\d+)$/ and $expire = $1;
+				/^token:(.+)$/ and $token = $1;
+			}
+		}
 	}
+	if (!$token or time > $expire - 5) {
+		my $form_data = [
+				client_id     => $clientid,
+				client_secret => $clientsecret,
+				scope         => 'http://api.microsofttranslator.com',
+				grant_type    => 'client_credentials',
+		];
+		my $response = $http->post_form(
+			"https://datamarket.accesscontrol.windows.net/v2/OAuth2-13/",
+			$form_data,
+		);
+
+		if ($response->{success} and $response->{content} =~ /^\{"token_type":".+?","access_token":"(.+?)","expires_in":"(\d+?)","scope":".+?"\}$/) {
+			$token = uri_escape("Bearer $1");
+			$expire = time + $2;
+			if (tell($fh) != -1) {
+				seek($fh, 0,0);
+				print $fh "expire:$expire\n";
+				print $fh "token:$token\n";
+				truncate($fh, tell($fh));
+			}
+		} else {
+			warn "$name Failed to get Access Token.\n" if ($debug);
+		}
+	}
+	close $fh if(tell($fh) != -1);
 	return $token;
 }
 
