@@ -111,7 +111,7 @@ while (<STDIN>) {
 $name = " -- $AGI{request}:";
 
 # Abort if required programs not found. #
-die "$name sox or mpg123 is missing. Aborting.\n" if (!$sox || !$mpg123);
+fatal_log("sox or mpg123 is missing. Aborting.") if (!$sox || !$mpg123);
 chomp($sox, $mpg123);
 
 # Sanitising input #
@@ -120,7 +120,7 @@ for ($AGI{arg_1}) {
 	s/[\\|*~<>^\(\)\[\]\{\}[:cntrl:]]/ /g;
 	s/\s+/ /g;
 	s/^\s|\s$//g;
-	die "$name No text passed for synthesis.\n" if (!length);
+	fatal_log("No text passed for synthesis.") if (!length);
 	$_ .= "." unless (/^.+[.,?!:;]$/);
 	@text = /.{1,1000}[.,?!:;]|.{1,1000}\s/g;
 }
@@ -130,7 +130,7 @@ if (length($AGI{arg_2})) {
 	if ($AGI{arg_2} =~ /[a-z]{2}(-[a-z]{2,3})?/) {
 		$lang = $AGI{arg_2};
 	} else {
-		die "$name Invalid language setting.\n";
+		fatal_log("Invalid language setting.");
 	}
 }
 if (length($AGI{arg_3})) {
@@ -142,11 +142,13 @@ if (length($AGI{arg_4})) {
 }
 
 # Check cache path size: dir length + md5 + file extension #
-if ($usecache && ((length($cachedir) + 32 + 6) < $maxlen)) {
-	mkpath("$cachedir") unless (-d "$cachedir");
-} else {
-	warn "$name Cache path size exceeds limit. Disabling cache.\n";
-	$usecache = 0;
+if ($usecache) {
+	if ((length($cachedir) + 32 + 6) < $maxlen) {
+		mkpath("$cachedir") unless (-d "$cachedir");
+	} else {
+		console_log("Cache path size exceeds limit. Disabling cache.");
+		$usecache = 0;
+	}
 }
 
 # Answer channel if not already answered #
@@ -156,7 +158,7 @@ if ($result[0] == 4) {
 	print "ANSWER\n";
 	@result = checkresponse();
 	if ($result[0] != 0) {
-		die "$name Failed to answer channel.\n";
+		fatal_log("Failed to answer channel.");
 	}
 }
 
@@ -182,15 +184,17 @@ foreach my $line (@text) {
 	$line =~ s/^\s+|\s+$//g;
 	next if (length($line) == 0);
 	if ($debug) {
-		warn "$name Text passed for synthesis: $line\n",
-			"$name Language: $lang, Interrupt keys: $intkey, Sample rate: $samplerate\n",
-			"$name Speed: $speed, Caching: $usecache, Cache dir: $cachedir\n";
+		console_log(
+			"Text passed for synthesis: $line, Language: $lang",
+			"Interrupt keys: $intkey, Sample rate: $samplerate, Speed: $speed",
+			"Caching: $usecache, Cache dir: $cachedir"
+		);
 	}
 	if ($usecache) {
 		$filename = md5_hex("$line.$lang.$speed");
 		# Stream file from cache if it exists #
 		if (-r "$cachedir/$filename.$fexten") {
-			warn "$name File already in cache.\n" if ($debug);
+			console_log("File already in cache.") if ($debug);
 			my $res = playback("$cachedir/$filename", $intkey);
 			last if ($res > 0);
 			die if ($res < 0);
@@ -199,7 +203,7 @@ foreach my $line (@text) {
 	}
 	# Get access token #
 	$atoken = get_access_token() if (!$atoken);
-	die "$name No API key found. Aborting.\n" if (!$atoken);
+	fatal_log("No API key found. Aborting.") if (!$atoken);
 
 	$line = uri_escape($line);
 
@@ -207,7 +211,7 @@ foreach my $line (@text) {
 	$SIG{'INT'} = \&int_handler;
 	$SIG{'HUP'} = \&int_handler;
 
-	($fh, $tmpname) = tempfile("mstts_XXXXXX", DIR => $tmpdir, UNLINK => 1);
+	($fh, $tmpname) = tempfile("mstts_XXXXXXXX", DIR => $tmpdir, UNLINK => 1);
 
 	my $ua_request = HTTP::Request->new('GET' =>
 		"$url/Speak?text=$line&language=$lang&format=$format&options=$quality&appid=$atoken"
@@ -215,26 +219,26 @@ foreach my $line (@text) {
 
 	my $ua_response = $ua->request($ua_request, $tmpname);
 
-	die "$name Failed to fetch file.\n" unless ($ua_response->is_success);
+	fatal_log("Failed to fetch file.") unless ($ua_response->is_success);
 
 	# Convert mp3 file to 16bit mono raw #
 	system($mpg123, "-q", "-w", "$tmpname.wav", $tmpname) == 0
-		or die "$name $mpg123 failed: $?\n";
+		or fatal_log("$mpg123 failed: $?");
 
 	# Detect sox version #
 	if (!$sox_ver) {
 		$sox_ver = (system("$sox --version > /dev/null 2>&1") == 0) ? 14 : 12;
-		warn "$name Found sox version $sox_ver in: $sox, mpg123 in: $mpg123\n" if ($debug);
+		console_log("Found sox version $sox_ver in: $sox, mpg123 in: $mpg123") if ($debug);
 	}
 	my @soxargs = get_sox_args("$tmpname.wav", "$tmpname.$fexten");
-	system(@soxargs) == 0 or die "$name $sox failed: $?\n";
+	system(@soxargs) == 0 or fatal_log("$sox failed: $?");
 	unlink "$tmpname.wav";
 
 	# Playback and save file in cache #
 	my $res = playback($tmpname, $intkey);
 	die if ($res < 0);
 	if ($usecache) {
-		warn "$name Saving file $filename to cache\n" if ($debug);
+		console_log("Saving file $filename to cache") if ($debug);
 		move("$tmpname.$fexten", "$cachedir/$filename.$fexten");
 	} else {
 		unlink "$tmpname.$fexten";
@@ -248,13 +252,17 @@ sub get_access_token {
 	my $token;
 	my $expire;
 	my $fh;
-	my $tfile = $cachedir . "/.mstts.token";
+	my $tfile;
+	my $spool = $ENV{'AST_SPOOL_DIR'};
 
-	if ($usecache) {
+	if ($spool) {
+	 $tfile = $spool . "/tmp/mstts.token";
+	}
+	if ($tfile) {
 		if (!-f $tfile) {
 			open($fh, ">", $tfile);
 		} elsif (open($fh, "+<", $tfile)) {
-			warn "$name Reading access token from file.\n" if ($debug);
+			console_log("Reading access token from file.") if ($debug);
 			while (<$fh>) {
 				/^expire:(\d+)$/ and $expire = $1;
 				/^token:(.+)$/ and $token = $1;
@@ -262,7 +270,8 @@ sub get_access_token {
 		}
 	}
 	if (!$token or time > $expire - 5) {
-		warn "$name Getting a new access token.\n" if ($debug);
+		$token = '';
+		console_log("Getting a new access token.") if ($debug);
 		my $response = $ua->post(
 			"https://datamarket.accesscontrol.windows.net/v2/OAuth2-13/",
 			[
@@ -275,17 +284,17 @@ sub get_access_token {
 		if ($response->is_success and $response->content =~ /^\{"token_type":".+?","access_token":"(.+?)","expires_in":"(\d+?)","scope":".+?"\}$/) {
 			$token = uri_escape("Bearer $1");
 			$expire = time + $2;
-			if (tell($fh) != -1) {
+			if ($fh) {
 				seek($fh, 0,0);
 				print $fh "expire:$expire\n";
 				print $fh "token:$token\n";
 				truncate($fh, tell($fh));
 			}
 		} else {
-			warn "$name Failed to get Access Token.\n" if ($debug);
+			console_log("Failed to get Access Token.") if ($debug);
 		}
 	}
-	close $fh if(tell($fh) != -1);
+	close $fh if($fh);
 	return $token;
 }
 
@@ -295,7 +304,6 @@ sub checkresponse {
 
 	chomp $input;
 	if ($input =~ /^200 result=(-?\d+)\s?(.*)$/) {
-		warn "$name Command returned: $input\n" if ($debug);
 		@values = ("$1", "$2");
 	} else {
 		$input .= <STDIN> if ($input =~ /^520-Invalid/);
@@ -312,13 +320,13 @@ sub playback {
 	print "STREAM FILE $file \"$keys\"\n";
 	@response = checkresponse();
 	if ($response[0] >= 32 && chr($response[0]) =~ /[\w*#]/) {
-		warn "$name Got digit ", chr($response[0]), "\n" if ($debug);
+		console_log("Got digit ", chr($response[0])) if ($debug);
 		print "SET EXTENSION ", chr($response[0]), "\n";
 		checkresponse();
 		print "SET PRIORITY 1\n";
 		checkresponse();
 	} elsif ($response[0] == -1) {
-		warn "$name Failed to play $file\n";
+		console_log("Failed to play $file");
 	}
 	return $response[0];
 }
@@ -352,6 +360,19 @@ sub get_sox_args {
 		}
 	}
 	return @soxargs;
+}
+
+sub console_log {
+	foreach my $message (@_) {
+		warn "$name $message\n";
+		print "NOOP \"$name $message\"\n";
+		checkresponse();
+	}
+}
+
+sub fatal_log {
+	console_log(@_);
+	die;
 }
 
 sub int_handler {
