@@ -237,9 +237,10 @@ sub get_access_token {
 	my $tfile = $cachedir . "/.mstts.token";
 
 	if ($usecache) {
-		if (!-e $tfile) {
+		if (!-f $tfile) {
 			open($fh, ">", $tfile);
 		} elsif (open($fh, "+<", $tfile)) {
+			warn "$name Reading access token from file.\n" if ($debug);
 			while (<$fh>) {
 				/^expire:(\d+)$/ and $expire = $1;
 				/^token:(.+)$/ and $token = $1;
@@ -247,6 +248,7 @@ sub get_access_token {
 		}
 	}
 	if (!$token or time > $expire - 5) {
+		warn "$name Getting a new access token.\n" if ($debug);
 		my $form_data = [
 				client_id     => $clientid,
 				client_secret => $clientsecret,
