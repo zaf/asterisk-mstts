@@ -1,16 +1,16 @@
-2012-07-22 Lefteris Zafiris <zaf.000@gmail.com> - 0.3
+2012-07-22 Lefteris Zafiris <zaf@fastmail.com> - 0.3
 	Added speed factor option and audio normalization
 	in cli app. Added support for strings bigger than
 	1000 chars. Added automatic sound format detection.
 	Added user defined speed factor. Removed support
 	for Bing API ID. Fixed token request mechanism.
 
-2012-04-22 Lefteris Zafiris <zaf.000@gmail.com> - 0.2
+2012-04-22 Lefteris Zafiris <zaf@fastmail.com> - 0.2
 	Support for access token API authentication.
 	CLI app now uses sox for playback and to
 	convert to output formats other than wav.
 	Added Proxy support.
 
-2012-03-18 Lefteris Zafiris <zaf.000@gmail.com> - 0.1
+2012-03-18 Lefteris Zafiris <zaf@fastmail.com> - 0.1
 	Initial release 0.1
 	Working cache mechanism. Support for wide-band audio.
