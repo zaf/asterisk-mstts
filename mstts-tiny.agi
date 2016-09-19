@@ -237,23 +237,18 @@ sub get_access_token {
 # Obtaining an Access Token #
 	my $token;
 	my $expire;
+	my $tempfl;
 	my $fh;
-	my $tfile;
 	my $spool = $ENV{'AST_SPOOL_DIR'};
+	my $tkfile = $spool . "/tmp/mstts.token";
 
-	if ($spool) {
-	 $tfile = $spool . "/tmp/mstts.token";
-	}
-	if ($tfile) {
-		if (!-f $tfile) {
-			open($fh, ">", $tfile);
-		} elsif (open($fh, "+<", $tfile)) {
-			console_log("Reading access token from file.") if ($debug);
-			while (<$fh>) {
-				/^expire:(\d+)$/ and $expire = $1;
-				/^token:(.+)$/ and $token = $1;
-			}
+	if (-f $tkfile && open($fh, "<", $tkfile)) {
+		console_log("Reading access token from file.") if ($debug);
+		while (<$fh>) {
+			/^expire:(\d+)$/ and $expire = $1;
+			/^token:(.+)$/ and $token = $1;
 		}
+		close $fh;
 	}
 	if (!$token or time > $expire - 5) {
 		$token = '';
@@ -272,17 +267,17 @@ sub get_access_token {
 		if ($response->{success} and $response->{content} =~ /^\{"token_type":".+?","access_token":"(.+?)","expires_in":"(\d+?)","scope":".+?"\}$/) {
 			$token = uri_escape("Bearer $1");
 			$expire = time + $2;
-			if ($fh) {
-				seek($fh, 0,0);
+			if ($spool) {
+				($fh, $tempfl) = tempfile();
 				print $fh "expire:$expire\n";
 				print $fh "token:$token\n";
-				truncate($fh, tell($fh));
+				close $fh;
+				move($tempfl, $tkfile);
 			}
 		} else {
 			console_log("Failed to get Access Token.") if ($debug);
 		}
 	}
-	close $fh if($fh);
 	return $token;
 }
 
