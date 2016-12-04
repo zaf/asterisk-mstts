@@ -1,3 +1,10 @@
+2016-12-04 Lefteris Zafiris <zaf@fastmail.com> - 0.5
+	Added support for the Bing TTS API
+
+2016-09-19 Lefteris Zafiris <zaf@fastmail.com> - 0.4
+	Many bug fixes. Added SSL Support and enable SSL by default.
+	Added 'tiny' version. Store the API token in disk.
+
 2012-07-22 Lefteris Zafiris <zaf@fastmail.com> - 0.3
 	Added speed factor option and audio normalization
 	in cli app. Added support for strings bigger than
