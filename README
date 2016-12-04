@@ -3,7 +3,7 @@
 ================================================
 
 This script makes use of Microsoft Bing text to speech API
-in order to redner text to speech and play it back to the user.
+in order to render text to speech and play it back to the user.
 It supports a variety of different languages.
 
 ------------
@@ -46,7 +46,7 @@ sample dialplan code for your extensions.conf
 exten => 1234,1,Answer()
     ;;Play mesage in English:
 exten => 1234,n,agi(mstts.agi,"This is a simple microsoft text to speech test in english.",en-US)
-    ;;Play message in Spanish with a femanle voice:
+    ;;Play message in Spanish with a female voice:
 exten => 1234,n,agi(mstts.agi,"Esta es una simple prueba en español.",es-ES,,f)
     ;;Play message in Japanese with a male voice:
 exten => 1234,n,agi(mstts.agi,"これは、日本の簡単なテストです。良い一日を。",ja-JP,,m)

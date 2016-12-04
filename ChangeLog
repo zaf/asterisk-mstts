@@ -3,7 +3,7 @@
 
 2016-09-19 Lefteris Zafiris <zaf@fastmail.com> - 0.4
 	Many bug fixes. Added SSL Support and enable SSL by default.
-	Added 'tiny' version. Store the API token in disk.
+	Added 'tiny' version. Store the API token on disk.
 
 2012-07-22 Lefteris Zafiris <zaf@fastmail.com> - 0.3
 	Added speed factor option and audio normalization
