@@ -88,7 +88,7 @@ while (<STDIN>) {
 
 my $name = " -- $AGI{request}:";
 
-# Sanitising input text #
+# Sanitizing input text #
 $AGI{arg_1} = decode('utf8', $AGI{arg_1});
 for ($AGI{arg_1}) {
 	s/[\\|*~<>^\(\)\[\]\{\}[:cntrl:]]/ /g;
@@ -148,7 +148,7 @@ my $format = 'raw-8khz-8bit-mono-mulaw';
 my $fexten = detect_format();
 $format = 'raw-16khz-16bit-mono-pcm' if ($fexten eq 'slin16');
 
-# Initialise User angent #
+# Initialize User agent #
 my $ua = LWP::UserAgent->new(ssl_opts => {verify_hostname => 1});
 $ua->agent("Asterisk Bing TTS module");
 $ua->env_proxy;
@@ -183,7 +183,7 @@ foreach my $line (@text) {
 	$atoken = get_access_token() if (!$atoken);
 	fatal_log("No access token could be obtained. Aborting.") if (!$atoken);
 
-	# Hnadle interrupts #
+	# Handle interrupts #
 	$SIG{'INT'} = \&int_handler;
 	$SIG{'HUP'} = \&int_handler;
 

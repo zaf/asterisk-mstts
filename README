@@ -45,7 +45,7 @@ sample dialplan code for your extensions.conf
 
 exten => 1234,1,Answer()
     ;;Play mesage in English:
-exten => 1234,n,agi(mstts.agi,"This is a simple microsoft text to speech test in english.",en-US)
+exten => 1234,n,agi(mstts.agi,"This is a simple bing text to speech test in English.",en-US)
     ;;Play message in Spanish with a female voice:
 exten => 1234,n,agi(mstts.agi,"Esta es una simple prueba en español.",es-ES,,f)
     ;;Play message in Japanese with a male voice:
@@ -61,7 +61,7 @@ exten => s,n,agi(mstts.agi,"Welcome to my small interactive voice response menu.
 exten => s,n(start),agi(mstts.agi,"Please dial a digit.",en-US,any)
 exten => s,n,WaitExten()
 
-    ;;PLayback the name of the digit and wait for another one:
+    ;;Playback the name of the digit and wait for another one:
 exten => _X,1,agi(mstts.agi,"You just pressed ${EXTEN}. Try another one please.",en-US,any)
 exten => _X,n,WaitExten()
 

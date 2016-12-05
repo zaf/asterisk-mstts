@@ -88,7 +88,7 @@ while (<STDIN>) {
 
 my $name = " -- $AGI{request}:";
 
-# Sanitising input text #
+# Sanitizing input text #
 $AGI{arg_1} = decode('utf8', $AGI{arg_1});
 for ($AGI{arg_1}) {
 	s/[\\|*~<>^\(\)\[\]\{\}[:cntrl:]]/ /g;
@@ -172,7 +172,7 @@ foreach my $line (@text) {
 			next;
 		}
 	}
-	# Initialise User angent #
+	# Initialize User agent #
 	if (!$http) {
 		$http = HTTP::Tiny->new(
 			agent      => 'Asterisk Bing TTS module',
@@ -184,7 +184,7 @@ foreach my $line (@text) {
 	$atoken = get_access_token() if (!$atoken);
 	fatal_log("No access token could be obtained. Aborting.") if (!$atoken);
 
-	# Hnadle interrupts #
+	# Handle interrupts #
 	$SIG{'INT'} = \&int_handler;
 	$SIG{'HUP'} = \&int_handler;
 
