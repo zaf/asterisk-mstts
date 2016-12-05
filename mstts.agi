@@ -146,7 +146,7 @@ if ($result[0] == 4) {
 # Detecting format based on the channel codec. #
 my $format = 'raw-8khz-8bit-mono-mulaw';
 my $fexten = detect_format();
-$format = 'raw-16khz-16bit-mono-pcm' if ($fexten eq 'slin16');
+$format = 'raw-16khz-16bit-mono-pcm' if ($fexten eq 'sln16');
 
 # Initialize User agent #
 my $ua = LWP::UserAgent->new(ssl_opts => {verify_hostname => 1});
@@ -296,7 +296,7 @@ sub detect_format {
 	my $format = 'ulaw';
 	print "GET FULL VARIABLE \${CHANNEL(audionativeformat)}\n";
 	my @reply = checkresponse();
-	$format = 'slin16' if ( $reply[1] !~ /^(slin|g729|gsm|ulaw|alaw|ilbc|g726|g723)$/ );
+	$format = 'sln16' if ( $reply[1] !~ /^(slin|g729|gsm|ulaw|alaw|ilbc|g726|g723)$/ );
 	return $format;
 }
 
