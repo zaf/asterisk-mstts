@@ -9,12 +9,11 @@
 # the GNU General Public License Version 2.
 #
 
-
 use warnings;
 use strict;
 use utf8;
 use Encode qw(decode encode);
-use Getopt::Std;
+use Getopt::Long;
 use File::Temp qw(tempfile);
 use LWP::UserAgent;
 use LWP::ConnCache;
@@ -24,28 +23,23 @@ use LWP::ConnCache;
 my $key = "";
 # -------------------------------------- #
 
-my %options;
 my @text;
 my @rawlist;
-my $samplerate;
 my $input;
-my $lang      = "en-US";
-my $gender    = "Female";
-my $format    = "raw-16khz-16bit-mono-pcm";
-my $level     = -3;
-my $speed     = 1;
-my $tmpdir    = "/tmp";
-my $timeout   = 15;
-my $url       = "https://speech.platform.bing.com/synthesize";
-my $sox       = `/usr/bin/which sox`;
-my %lang_list = get_lang_list();
-
-VERSION_MESSAGE() if (!@ARGV);
-
-getopts('o:l:g:t:r:f:n:s:k:hqv', \%options);
-
-# Display help messages #
-VERSION_MESSAGE() if (defined $options{h});
+my $file;
+my $outfile;
+my $quiet;
+my $lang       = "en-US";
+my $gender     = "Female";
+my $format     = "raw-16khz-16bit-mono-pcm";
+my $samplerate = 16000;
+my $level      = -3;
+my $speed      = 1;
+my $tmpdir     = "/tmp";
+my $timeout    = 15;
+my $url        = "https://speech.platform.bing.com/synthesize";
+my $sox        = `/usr/bin/which sox`;
+my %lang_list  = get_lang_list();
 
 if (!$sox) {
 	say_msg("sox is missing. Aborting.");
@@ -53,14 +47,36 @@ if (!$sox) {
 }
 chomp($sox);
 
-# Initialize User agent #
-my $ua = LWP::UserAgent->new(ssl_opts => {verify_hostname => 1});
-$ua->env_proxy;
-$ua->conn_cache(LWP::ConnCache->new());
-$ua->timeout($timeout);
+# Parse cli options
+Getopt::Long::Configure("bundling", "no_ignore_case", "permute", "no_getopt_compat");
+GetOptions (
+	"k=s" => \$key,
+	"t=s" => \$input,
+	"f=s" => \$file,
+	"l=s" => \$lang,
+	"g=s" => \$gender,
+	"r=i" => \$samplerate,
+	"o=s" => \$outfile,
+	"n=f" => \$level,
+	"s=f" => \$speed,
+	"q"   => \$quiet,
+	"v"   => \&print_lang_list,
+	"h"   => \&help_message,
+) or help_message();
 
-parse_options();
-my $atoken = get_access_token();
+if ($file) {
+	if (open(my $fh, "<", $file)) {
+		$input = do { local $/; <$fh> };
+		close($fh);
+	} else {
+		say_msg("Cant read file $file");
+	}
+}
+if ($gender =~ /^m(ale)?$/i) {
+	$gender = "Male";
+} else {
+	$gender = "Female";
+}
 if (!exists $lang_list{"$lang-$gender"}) {
 	say_msg("Unsupported language/gender combination.");
 	exit 1;
@@ -79,6 +95,14 @@ for ($input) {
 	$_ .= "." unless (/^.+[.,?!:;]$/);
 	@text = /.{1,1000}[.,?!:;]|.{1,1000}\s/g;
 }
+
+# Initialize User agent #
+my $ua = LWP::UserAgent->new(ssl_opts => {verify_hostname => 1});
+$ua->env_proxy;
+$ua->conn_cache(LWP::ConnCache->new());
+$ua->timeout($timeout);
+
+my $atoken = get_access_token();
 
 foreach my $line (@text) {
 	# Get speech data chunks and save them in temp files #
@@ -113,27 +137,15 @@ foreach my $line (@text) {
 	push(@rawlist, ('-r', '16000', '-b', '16', '-c', '1', '-e', 'signed-integer', $tmpname));
 }
 
-# concatenate sound files #
-my ($wavfh, $wavname) = tempfile(
-	"bingtts_XXXXXX",
-	SUFFIX => ".wav",
-	DIR    => $tmpdir,
-	UNLINK => 1
-);
-if (system($sox, @rawlist, $wavname)) {
-	say_msg("sox failed to concatenate sound files.");
-	exit 1;
-}
-
-# Set sox args and process wav file #
-my @soxargs = ($sox, '-q', "--norm=$level", $wavname);
-if (defined $options{o}) {
-	push(@soxargs, ($options{o}));
+# Set sox args and process sound files #
+my @soxargs = ($sox, '-q', "--norm=$level", @rawlist);
+if ($outfile) {
+	push(@soxargs, ($outfile));
 } else {
 	push(@soxargs, ('-t', 'alsa', '-d'));
 }
 push(@soxargs, ('tempo', '-s', $speed)) if ($speed != 1);
-push(@soxargs, ('rate', $samplerate)) if ($samplerate);
+push(@soxargs, ('rate', $samplerate)) if ($samplerate != 16000);
 
 if (system(@soxargs)) {
 	say_msg("sox failed to process sound file.");
@@ -143,7 +155,6 @@ if (system(@soxargs)) {
 exit 0;
 
 sub get_access_token {
-	# Obtaining an Access Token #
 	my $token = '';
 	if (!$key) {
 		say_msg("No API Key provided.");
@@ -160,62 +171,6 @@ sub get_access_token {
 			exit 1;
 		}
 	return $token;
-}
-
-sub parse_options {
-	print_lang_list() if (defined $options{v});
-	$key = $options{k} if (defined $options{k});
-	# Get input text #
-	if (defined $options{t}) {
-		$input = $options{t};
-	} elsif (defined $options{f}) {
-		if (open(my $fh, "<", "$options{f}")) {
-			$input = do { local $/; <$fh> };
-			close($fh);
-		} else {
-			say_msg("Cant read file $options{f}");
-		}
-	}
-	# check if language and gender settings are valid #
-	if (defined $options{l}) {
-		if ($options{l} =~ /^[a-z]{2}-[A-Z]{2}$/) {
-			$lang = $options{l};
-		} else {
-			say_msg("Invalid language setting, using default.");
-		}
-	}
-	if (defined $options{g}) {
-		if ($options{l} =~ /^(f|m)$/i) {
-			$gender = $options{g};
-		} else {
-			say_msg("Invalid gender setting, using default.");
-		}
-	}
-	# set audio sample rate #
-	if (defined $options{r}) {
-		if ($options{r} =~ /\d+/) {
-			$samplerate = $options{r};
-		} else {
-			say_msg("Invalid sample rate, using default.");
-		}
-	}
-	# set speed factor #
-	if (defined $options{s}) {
-		if ($options{s} =~ /\d+/) {
-			$speed = $options{s};
-		} else {
-			say_msg("Invalid speed factor, using default.");
-		}
-	}
-	# set the audio normalization level #
-	if (defined $options{n}) {
-		if ($options{n} =~ /\d+/) {
-			$level = $options{n};
-		} else {
-			say_msg("Invalid normalization level, using default.");
-		}
-	}
-	return;
 }
 
 sub print_lang_list {
@@ -260,15 +215,14 @@ sub get_lang_list {
 }
 
 sub say_msg {
-	# Print messages to user if 'quiet' flag is not set #
+	# Print messages to stderr if 'quiet' flag is not set #
 	my $message = join(" ", @_);
-	warn $message if (!defined $options{q});
+	warn "$message\n" if (!$quiet);
 	return;
 }
 
-sub VERSION_MESSAGE {
-	# Help message #
-	print "Text to speech synthesis using Bing TTS API.\n\n",
+sub help_message {
+	print "\nText to speech synthesis using Bing TTS API.\n\n",
 		"Supported options:\n",
 		" -t <text>      text string to synthesize\n",
 		" -f <file>      text file to synthesize\n",
