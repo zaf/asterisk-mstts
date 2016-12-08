@@ -95,8 +95,7 @@ for ($AGI{arg_1}) {
 	s/\s+/ /g;
 	s/^\s|\s$//g;
 	fatal_log("No text passed for synthesis.") if (!length);
-	$_ .= "." unless (/^.+[.,?!:;]$/);
-	@text = /.{1,1000}[.,?!:;]|.{1,1000}\s/g;
+	@text = /.{1,1000}$|.{1,1000}[.,?!:;]|.{1,1000}\s/g;
 }
 
 # Setting up language, gender and interrupt keys #

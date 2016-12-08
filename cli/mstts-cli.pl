@@ -35,16 +35,12 @@ my $format     = "raw-16khz-16bit-mono-pcm";
 my $samplerate = 16000;
 my $level      = -3;
 my $speed      = 1;
-my $tmpdir     = "/tmp";
 my $timeout    = 15;
 my $url        = "https://speech.platform.bing.com/synthesize";
-my $sox        = `/usr/bin/which sox`;
 my %lang_list  = get_lang_list();
+my $sox        = `/usr/bin/which sox`;
 
-if (!$sox) {
-	say_msg("sox is missing. Aborting.");
-	exit 1;
-}
+fatal("sox is missing. Aborting.") if (!$sox);
 chomp($sox);
 
 # Parse cli options
@@ -64,12 +60,13 @@ GetOptions (
 	"h"   => \&help_message,
 ) or help_message();
 
+fatal("No API Key provided.") if (!$key);
 if ($file) {
 	if (open(my $fh, "<", $file)) {
 		$input = do { local $/; <$fh> };
 		close($fh);
 	} else {
-		say_msg("Cant read file $file");
+		fatal("Cant read file $file");
 	}
 }
 if ($gender =~ /^m(ale)?$/i) {
@@ -77,10 +74,7 @@ if ($gender =~ /^m(ale)?$/i) {
 } else {
 	$gender = "Female";
 }
-if (!exists $lang_list{"$lang-$gender"}) {
-	say_msg("Unsupported language/gender combination.");
-	exit 1;
-}
+fatal("Unsupported language/gender combination.") if (!exists $lang_list{"$lang-$gender"});
 
 $input = decode('utf8', $input);
 for ($input) {
@@ -88,13 +82,9 @@ for ($input) {
 	s/[\\|*~<>^\n\(\)\[\]\{\}[:cntrl:]]/ /g;
 	s/\s+/ /g;
 	s/^\s|\s$//g;
-	if (!length) {
-		say_msg("No text passed for synthesis.");
-		exit 1;
-	}
-	$_ .= "." unless (/^.+[.,?!:;]$/);
-	@text = /.{1,1000}[.,?!:;]|.{1,1000}\s/g;
+	@text = /.{1,1000}$|.{1,1000}[.,?!:;]|.{1,1000}\s/g;
 }
+fatal("No text passed for synthesis.") if (!length($text[0]));
 
 # Initialize User agent #
 my $ua = LWP::UserAgent->new(ssl_opts => {verify_hostname => 1});
@@ -120,15 +110,12 @@ foreach my $line (@text) {
 		"Authorization" => $atoken,
 		"Content" => $data,
 	);
-	if (!$ua_response->is_success) {
-		say_msg("Failed to fetch file:", $ua_response->status_line);
-		exit 1;
-	}
+	fatal("Failed to fetch file:", $ua_response->status_line) if (!$ua_response->is_success);
 
 	my ($tmpfh, $tmpname) = tempfile(
 		"bingtts_XXXXXX",
 		SUFFIX => ".raw",
-		DIR    => $tmpdir,
+		TMPDIR => 1,
 		UNLINK => 1,
 	);
 	binmode $tmpfh;
@@ -147,35 +134,54 @@ if ($outfile) {
 push(@soxargs, ('tempo', '-s', $speed)) if ($speed != 1);
 push(@soxargs, ('rate', $samplerate)) if ($samplerate != 16000);
 
-if (system(@soxargs)) {
-	say_msg("sox failed to process sound file.");
-	exit 1;
-}
-
+fatal("sox failed to process sound file.") if (system(@soxargs));
 exit 0;
 
 sub get_access_token {
-	my $token = '';
-	if (!$key) {
-		say_msg("No API Key provided.");
-		exit 1;
-	}
 	my $response = $ua->post(
 		"https://api.cognitive.microsoft.com/sts/v1.0/issueToken",
 		"Ocp-Apim-Subscription-Key" => $key,
 	);
-	if ($response->is_success) {
-		$token = "Bearer " . $response->content;
-		} else {
-			say_msg("Failed to get Access Token:", $response->status_line);
-			exit 1;
-		}
-	return $token;
+	fatal("Failed to get Access Token:", $response->status_line) if (!$response->is_success);
+	return"Bearer " . $response->content;
 }
 
 sub print_lang_list {
 	print "Supported Language list:\n";
 	print "$_\n" for (keys %lang_list);
+	exit 1;
+}
+
+sub say_msg {
+	# Print messages to stderr if 'quiet' flag is not set #
+	my $message = join(" ", @_);
+	warn "$message\n" if (!$quiet);
+	return;
+}
+
+sub fatal {
+	say_msg(@_);
+	exit 1;
+}
+
+sub help_message {
+	print "\nText to speech synthesis using Bing TTS API.\n\n",
+		"Supported options:\n",
+		" -t <text>      text string to synthesize\n",
+		" -f <file>      text file to synthesize\n",
+		" -l <lang>      specify the language to use, defaults to 'en-US' (US English)\n",
+		" -g <gender>    specify the voice gender, defaults to 'f' (female)\n",
+		" -r <rate>      specify the output sampling rate in Hertz (default 16000)\n",
+		" -o <filename>  save output as file\n",
+		" -n <dB-level>  normalize the audio to the given level (default -3)\n",
+		" -s <factor>    specify the speech rate speed factor (default 1.0)\n",
+		" -k <key>       set the Bing API key\n",
+		" -q             quiet (Don't print any messages or warnings)\n",
+		" -h             this help message\n",
+		" -v             supported languages list\n\n",
+		"Examples:\n",
+		"$0 -t \"Hello world\"\n\tHave the synthesized speech played back to the user.\n",
+		"$0 -o hello.wav -l en-GB -t \"Hello world\"\n\tSave the synthesized speech as a sound file.\n\n";
 	exit 1;
 }
 
@@ -214,30 +220,3 @@ sub get_lang_list {
 	return %list;
 }
 
-sub say_msg {
-	# Print messages to stderr if 'quiet' flag is not set #
-	my $message = join(" ", @_);
-	warn "$message\n" if (!$quiet);
-	return;
-}
-
-sub help_message {
-	print "\nText to speech synthesis using Bing TTS API.\n\n",
-		"Supported options:\n",
-		" -t <text>      text string to synthesize\n",
-		" -f <file>      text file to synthesize\n",
-		" -l <lang>      specify the language to use, defaults to 'en-US' (US English)\n",
-		" -g <gender>    specify the voice gender, defaults to 'f' (female)\n",
-		" -r <rate>      specify the output sampling rate in Hertz (default 16000)\n",
-		" -o <filename>  save output as file\n",
-		" -n <dB-level>  normalize the audio to the given level (default -3)\n",
-		" -s <factor>    specify the speech rate speed factor (default 1.0)\n",
-		" -k <key>       set the Bing API key\n",
-		" -q             quiet (Don't print any messages or warnings)\n",
-		" -h             this help message\n",
-		" -v             supported languages list\n\n",
-		"Examples:\n",
-		"$0 -t \"Hello world\"\n\tHave the synthesized speech played back to the user.\n",
-		"$0 -o hello.wav -l en-GB -t \"Hello world\"\n\tSave the synthesized speech as a sound file.\n\n";
-	exit 1;
-}
