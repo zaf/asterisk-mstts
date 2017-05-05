@@ -52,8 +52,7 @@ $| = 1;
 #   User defined parameters:          #
 # ----------------------------------- #
 # Your Azure Marketplace credentials. #
-my $clientid = "";
-my $clientsecret = "";
+my $azurekey;
 
 # Default language                    #
 my $lang = "en";
@@ -268,16 +267,13 @@ sub get_access_token {
 		$token = '';
 		console_log("Getting a new access token.") if ($debug);
 		my $response = $ua->post(
-			"https://datamarket.accesscontrol.windows.net/v2/OAuth2-13/",
+			"https://api.cognitive.microsoft.com/sts/v1.0/issueToken",
 			[
-				client_id     => $clientid,
-				client_secret => $clientsecret,
-				scope         => 'http://api.microsofttranslator.com',
-				grant_type    => 'client_credentials',
+				'Ocp-Apim-Subscription-Key' => $azurekey,
 			],
 		);
-		if ($response->is_success and $response->content =~ /^\{"token_type":".+?","access_token":"(.+?)","expires_in":"(\d+?)","scope":".+?"\}$/) {
-			$token = uri_escape("Bearer $1");
+		if ($response->is_success) {
+			$token = uri_escape("Bearer " . $response->decoded_content);
 			$expire = time + $2;
 			if ($spool) {
 				($fh, $tempfl) = tempfile();
