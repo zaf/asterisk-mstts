@@ -36,7 +36,7 @@ my $samplerate = 16000;
 my $level      = -3;
 my $speed      = 1;
 my $timeout    = 15;
-my $url        = "https://speech.platform.bing.com/synthesize";
+my $url        = "https://westus.tts.speech.microsoft.com/cognitiveservices/v1";
 my %lang_list  = get_lang_list();
 my $sox        = `/usr/bin/which sox`;
 
@@ -139,7 +139,7 @@ exit 0;
 
 sub get_access_token {
 	my $response = $ua->post(
-		"https://api.cognitive.microsoft.com/sts/v1.0/issueToken",
+		"https://westus.api.cognitive.microsoft.com/sts/v1.0/issueToken",
 		"Ocp-Apim-Subscription-Key" => $key,
 	);
 	fatal("Failed to get Access Token:", $response->status_line) if (!$response->is_success);

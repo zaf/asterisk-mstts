@@ -75,7 +75,7 @@ my $intkey  = "";
 my $tmpdir  = "/tmp";
 my $maxlen  = 4096;
 my $timeout = 10;
-my $url     = "https://speech.platform.bing.com/synthesize";
+my $url     = "https://westus.tts.speech.microsoft.com/cognitiveservices/v1";
 my %lang_list = get_lang_list();
 
 # Store AGI input: Text, Language, Interrupt, Gender #
@@ -247,7 +247,7 @@ sub get_access_token {
 		my %options = ( 'headers' => \%headers );
 		my $response = $http->request(
 			'POST',
-			"https://api.cognitive.microsoft.com/sts/v1.0/issueToken",
+			"https://westus.api.cognitive.microsoft.com/sts/v1.0/issueToken",
 			\%options
 		);
 		if ($response->{success}) {
