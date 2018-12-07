@@ -1,9 +1,9 @@
-=============================================
-      Microsoft TTS script for Asterisk
-=============================================
+================================================
+     Microsoft Bing TTS script for Asterisk
+================================================
 
-This script makes use of Microsoft Translator text to speech service
-in order to redner text to speech and play it back to the user.
+This script makes use of Microsoft Bing text to speech API
+in order to render text to speech and play it back to the user.
 It supports a variety of different languages.
 
 ------------
@@ -12,13 +12,7 @@ Requirements
 Perl         The Perl Programming Language
 perl-libwww  The World-Wide Web library for Perl
 perl-Crypt-SSLeay or perl-IO-Socket-SSL for use of SSL/TLS encryption
-sox          Sound eXchange, sound processing program
-mpg123       MPEG Audio Player and decoder
 Internet access in order to contact MS and get the voice data.
-
-To use this script you have to subscribe to the Microsoft Translator API
-on Azure Marketplace and register your application:
-https://datamarket.azure.com/developer/applications/
 
 ------------
 Installation
@@ -30,12 +24,11 @@ To make sure check your /etc/asterisk/asterisk.conf file
 -----
 Usage
 -----
-agi(mstts.agi,"text",[language],[intkey],[speed]): This will invoke the Microsoft TTS
+agi(mstts.agi,"text",[language],[intkey],[gender]): This will invoke the Bing TTS
 engine, render the text string to speech and play it back to the user.
 If 'intkey' is set the script will wait for user input. Any given interrupt keys will
 cause the playback to immediately terminate and the dialplan to proceed to the
 matching extension (this is mainly for use in IVR, see README for examples).
-If 'speed' is set the speech rate is altered by that factor.
 
 The script contacts MS TTS service in order to get the voice data
 which then stores in a local cache (by default /tmp/) for future use.
@@ -52,30 +45,30 @@ sample dialplan code for your extensions.conf
 
 exten => 1234,1,Answer()
     ;;Play mesage in English:
-exten => 1234,n,agi(mstts.agi,"This is a simple microsoft text to speech test in english.",en)
-    ;;Play message in Spanish
-exten => 1234,n,agi(mstts.agi,"Esta es una simple prueba en español.",es)
-    ;;Play message in Japanese
-exten => 1234,n,agi(mstts.agi,"これは、日本の簡単なテストです。良い一日を。",ja)
+exten => 1234,n,agi(mstts.agi,"This is a simple bing text to speech test in English.",en-US)
+    ;;Play message in Spanish with a female voice:
+exten => 1234,n,agi(mstts.agi,"Esta es una simple prueba en español.",es-ES,,f)
+    ;;Play message in Japanese with a male voice:
+exten => 1234,n,agi(mstts.agi,"これは、日本の簡単なテストです。良い一日を。",ja-JP,,m)
 
 ;A simple dynamic IVR using MSTTS
 
 [my_ivr]
 exten => s,1,Answer()
 exten => s,n,Set(TIMEOUT(digit)=5)
-exten => s,n,agi(mstts.agi,"Welcome to my small interactive voice response menu.",en)
+exten => s,n,agi(mstts.agi,"Welcome to my small interactive voice response menu.",en-US)
     ;;Wait for digit:
-exten => s,n(start),agi(mstts.agi,"Please dial a digit.",en,any)
+exten => s,n(start),agi(mstts.agi,"Please dial a digit.",en-US,any)
 exten => s,n,WaitExten()
 
-    ;;PLayback the name of the digit and wait for another one:
-exten => _X,1,agi(mstts.agi,"You just pressed ${EXTEN}. Try another one please.",en,any)
+    ;;Playback the name of the digit and wait for another one:
+exten => _X,1,agi(mstts.agi,"You just pressed ${EXTEN}. Try another one please.",en-US,any)
 exten => _X,n,WaitExten()
 
-exten => i,1,agi(mstts.agi,"Invalid extension.",en)
+exten => i,1,agi(mstts.agi,"Invalid extension.",en-US)
 exten => i,n,goto(s,start)
 
-exten => t,1,agi(mstts.agi,"Request timed out.",en)
+exten => t,1,agi(mstts.agi,"Request timed out.",en-US)
 exten => t,n,goto(s,start)
 
 exten => h,1,Hangup()
@@ -83,17 +76,35 @@ exten => h,1,Hangup()
 -------------------
 Supported Languages
 -------------------
-ca,     ca-es,    da,    da-dk,
-de,     de-de,    en,    en-au,
-en-ca,  en-gb,    en-in, en-us,
-es,     es-es,    es-mx, fi,
-fi-fi,  fr,       fr-ca, fr-fr,
-it,     it-it,    ja,    ja-jp,
-ko,     ko-kr,    nb-no, nl,
-nl-nl,  no,       pl,    pl-pl,
-pt,     pt-br,    pt-pt, ru,
-ru-ru,  sv,       sv-se, zh-chs,
-zh-cht, zh-cn,    zh-hk, zh-tw
+ar-EG - Female
+de-DE - Female
+de-DE - Male
+en-AU - Female
+en-CA - Female
+en-GB - Female
+en-GB - Male
+en-IN - Male
+en-US - Female
+en-US - Male
+es-ES - Female
+es-ES - Male
+es-MX - Male
+fr-CA - Female
+fr-FR - Female
+fr-FR - Male
+it-IT - Male
+ja-JP - Female
+ja-JP - Male
+pt-BR - Male
+ru-RU - Female
+ru-RU - Male
+zh-CN - Female
+zh-CN - Female
+zh-CN - Male
+zh-HK - Female
+zh-HK - Male
+zh-TW - Female
+zh-TW - Male
 
 -----------------------
 Security Considerations
@@ -123,39 +134,3 @@ License v2. See COPYING for details.
 Homepage
 --------
 http://zaf.github.com/asterisk-mstts/
-
----------------
-API Description
----------------
-
-Request
--------
-GET    http://api.microsofttranslator.com/V2/Http.svc/Speak
-
-Parameters
-----------
-appId
- Required. If the Authorization header is used, leave the appid field empty else
- a string containing "Bearer" + " " + access token.
-
-text
- Required. A string containing a sentence or sentences of the specified language to be
- spoken for the wave stream.
-
-language
- Required. A string representing the supported language code to speak the text in.
- The code must be present in the list of codes returned from the method GetLanguagesForSpeak.
-
-format
- Optional. A string specifying the content-type ID. Currently, "audio/wav" and
- "audio/mp3" are available. The default value is "audio/wav".
-
-options
- Optional. A string specifying the quality of the audio signals. Currently, "MaxQuality"
- and "MinSize" are available. With "MaxQuality", you can get the voice(s) with the highest
- quality, and with "MinSize", you can get the voices with the smallest size. If no value
- is provided, we default to "MinSize".
-
-Response
---------
-Returns a wave or mp3 stream of the passed-in text being spoken in the desired language.

@@ -1,3 +1,9 @@
+2018-12-07 Lefteris Zafiris <zaf@fastmail.com> - 0.6
+	Updated to work with the Azure speech services.
+
+2016-12-04 Lefteris Zafiris <zaf@fastmail.com> - 0.5
+	Added support for the Bing TTS API
+
 2016-09-19 Lefteris Zafiris <zaf@fastmail.com> - 0.4
 	Many bug fixes. Added SSL Support and enable SSL by default.
 	Added 'tiny' version. Store the API token on disk.

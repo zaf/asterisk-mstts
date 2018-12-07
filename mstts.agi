@@ -1,9 +1,9 @@
 #!/usr/bin/env perl
 
 #
-# AGI script that uses MS Translator API for speech synthesis.
+# AGI script that uses Bing Text To Speech API for speech synthesis.
 #
-# Copyright (C) 2012 - 2014, Lefteris Zafiris <zaf@fastmail.com>
+# Copyright (C) 2016, Lefteris Zafiris <zaf@fastmail.com>
 #
 # This program is free software, distributed under the terms of
 # the GNU General Public License Version 2. See the COPYING file
@@ -12,95 +12,73 @@
 # -----
 # Usage
 # -----
-# agi(mstts.agi,"text",[language],[intkey],[speed]): This will invoke the Microsoft TTS
+# agi(mstts.agi,"text",[language],[intkey],[gender]): This will invoke the Bing TTS
 # engine, render the text string to speech and play it back to the user.
 # If 'intkey' is set the script will wait for user input. Any given interrupt keys will
 # cause the playback to immediately terminate and the dialplan to proceed to the
 # matching extension (this is mainly for use in IVR, see README for examples).
-# If 'speed' is set the speech rate is altered by that factor.
 #
-# The script contacts Microsoft Translate TTS service in order to get the voice data
+# The script contacts Microsoft Bing TTS service in order to get the voice data
 # which then stores in a local cache (by default /tmp/) for future use.
 #
-# In order to use this script you have to subscribe to the Microsoft
-# Translator API on Azure Marketplace and register your application:
-# https://datamarket.azure.com/developer/applications/
-#
-# Parameters like default language, sample rate, caching and cache dir
+# Parameters like default language, caching and cache dir
 # can be set up by altering the following variables:
-# Default langeuage: $lang
-# Sample rate:       $samplerate
-# Speed factor:      $speed
-# Chace:             $usecache
-# Chache directory:  $cachedir
-# SoX Version:       $sox_ver
+# Default language: $lang
+# Speaker gender:   $gender
+# Chace:            $usecache
+# Chache directory: $cachedir
 #
 
 use warnings;
 use strict;
+use utf8;
 use Encode qw(decode encode);
+use File::Basename qw(basename);
 use File::Temp qw(tempfile);
 use File::Copy qw(move);
 use File::Path qw(mkpath);
 use Digest::MD5 qw(md5_hex);
-use URI::Escape;
 use LWP::UserAgent;
 use LWP::ConnCache;
 $| = 1;
 
-# ----------------------------------- #
-#   User defined parameters:          #
-# ----------------------------------- #
-# Your Azure Marketplace credentials. #
-my $clientid = "";
-my $clientsecret = "";
+# ------------------------------ #
+#   User defined parameters:     #
+# ------------------------------ #
+# Bing API Key                   #
+my $key = "";
 
-# Default language                    #
-my $lang = "en";
+# Default language               #
+my $lang = 'en-US';
 
-# Output speed factor                 #
-my $speed = 1;
+# Default speaker gender         #
+my $gender ='Female';
 
-# Use of cache mechanism              #
+# Use of cache mechanism         #
 my $usecache = 1;
 
-# Cache directory path                #
-my $cachedir = "/tmp";
+# Cache directory path           #
+my $cachedir = '/tmp';
 
-# Output audio sample rate            #
-# Leave blank to auto-detect          #
-my $samplerate = "";
-
-# SoX Version                         #
-# Leave blank to auto-detect          #
-my $sox_ver = "";
-
-# Verbose debugging messages          #
+# Verbose debugging messages     #
 my $debug = 0;
 
-# ----------------------------------- #
+# ------------------------------ #
 
 my %AGI;
 my @text;
+my @result;
+my $atoken;
 my $fh;
 my $tmpname;
-my $filename;
-my $fexten;
-my @result;
-my $name;
-my $ua;
-my $atoken;
-my $format    = "audio/mp3";
-my $quality   = "MaxQuality";
-my $intkey    = "";
-my $tmpdir    = "/tmp";
-my $maxlen    = 4096;
-my $timeout   = 10;
-my $url       = "https://api.microsofttranslator.com/V2/Http.svc";
-my $sox       = `/usr/bin/which sox`;
-my $mpg123    = `/usr/bin/which mpg123`;
+my $intkey  = "";
+my $tmpdir  = "/tmp";
+my $maxlen  = 4096;
+my $timeout = 10;
+my $url     = "https://westus.tts.speech.microsoft.com/cognitiveservices/v1";
+my %lang_list = get_lang_list();
 
-# Store AGI input #
+# Store AGI input: Text, Language, Interrupt, Gender #
 ($AGI{arg_1}, $AGI{arg_2}, $AGI{arg_3}, $AGI{arg_4}) = @ARGV;
 while (<STDIN>) {
 	chomp;
@@ -108,26 +86,21 @@ while (<STDIN>) {
 	$AGI{$1} = $2 if (/^agi_(\w+)\:\s+(.*)$/);
 }
 
-$name = " -- $AGI{request}:";
+my $name = " -- $AGI{request}:";
 
-# Abort if required programs not found. #
-fatal_log("sox or mpg123 is missing. Aborting.") if (!$sox || !$mpg123);
-chomp($sox, $mpg123);
-
-# Sanitising input #
+# Sanitizing input text #
 $AGI{arg_1} = decode('utf8', $AGI{arg_1});
 for ($AGI{arg_1}) {
 	s/[\\|*~<>^\(\)\[\]\{\}[:cntrl:]]/ /g;
 	s/\s+/ /g;
 	s/^\s|\s$//g;
 	fatal_log("No text passed for synthesis.") if (!length);
-	$_ .= "." unless (/^.+[.,?!:;]$/);
-	@text = /.{1,1000}[.,?!:;]|.{1,1000}\s/g;
+	@text = /.{1,1000}$|.{1,1000}[.,?!:;]|.{1,1000}\s/g;
 }
 
-# Setting language, interrupt keys and speed rate #
+# Setting up language, gender and interrupt keys #
 if (length($AGI{arg_2})) {
-	if ($AGI{arg_2} =~ /[a-z]{2}(-[a-z]{2,3})?/) {
+	if ($AGI{arg_2} =~ /^[a-z]{2}-[A-Z]{2}$/) {
 		$lang = $AGI{arg_2};
 	} else {
 		fatal_log("Invalid language setting.");
@@ -138,8 +111,15 @@ if (length($AGI{arg_3})) {
 	$intkey = $AGI{arg_3} if ($AGI{arg_3} =~ /^[0-9*#]+$/);
 }
 if (length($AGI{arg_4})) {
-	$speed = $AGI{arg_4} if ($AGI{arg_4} =~ /^\d+(\.\d+)?$/);
+	if ($AGI{arg_4} eq "m") {
+		$gender = 'Male';
+	} elsif  ($AGI{arg_4} eq "f") {
+		$gender = 'Female';
+	} else {
+		console_log("Invalid Gender setting, using default.");
+	}
 }
+fatal_log("Unsupported language/gender combination.") if (!exists $lang_list{"$lang-$gender"});
 
 # Check cache path size: dir length + md5 + file extension #
 if ($usecache) {
@@ -162,18 +142,14 @@ if ($result[0] == 4) {
 	}
 }
 
-# Setting filename extension according to sample rate. #
-if    (!$samplerate)         { ($fexten, $samplerate) = detect_format(); }
-elsif ($samplerate == 12000) { $fexten = "sln12"; }
-elsif ($samplerate == 16000) { $fexten = "sln16"; }
-elsif ($samplerate == 32000) { $fexten = "sln32"; }
-elsif ($samplerate == 44100) { $fexten = "sln44"; }
-elsif ($samplerate == 48000) { $fexten = "sln48"; }
-else                         { ($fexten, $samplerate) =  ("sln", 8000); }
+# Detecting format based on the channel codec. #
+my $format = 'raw-8khz-8bit-mono-mulaw';
+my $fexten = detect_format();
+$format = 'raw-16khz-16bit-mono-pcm' if ($fexten eq 'sln16');
 
-# Initialise User angent #
-$ua = LWP::UserAgent->new(ssl_opts => {verify_hostname => 1});
-$ua->agent("Asterisk MS TTS module");
+# Initialize User agent #
+my $ua = LWP::UserAgent->new(ssl_opts => {verify_hostname => 1});
+$ua->agent("Asterisk Bing TTS module");
 $ua->env_proxy;
 $ua->conn_cache(LWP::ConnCache->new());
 $ua->timeout($timeout);
@@ -185,13 +161,14 @@ foreach my $line (@text) {
 	next if (length($line) == 0);
 	if ($debug) {
 		console_log(
-			"Text passed for synthesis: $line, Language: $lang",
-			"Interrupt keys: $intkey, Sample rate: $samplerate, Speed: $speed",
+			"Text passed for synthesis: $line, Language: $lang, Gender: $gender",
+			"Interrupt keys: $intkey, Format: $fexten",
 			"Caching: $usecache, Cache dir: $cachedir"
 		);
 	}
+	my $filename;
 	if ($usecache) {
-		$filename = md5_hex("$line.$lang.$speed");
+		$filename = md5_hex("$line.$lang.$gender.$format");
 		# Stream file from cache if it exists #
 		if (-r "$cachedir/$filename.$fexten") {
 			console_log("File already in cache.") if ($debug);
@@ -203,45 +180,36 @@ foreach my $line (@text) {
 	}
 	# Get access token #
 	$atoken = get_access_token() if (!$atoken);
-	fatal_log("No API key found. Aborting.") if (!$atoken);
+	fatal_log("No access token could be obtained. Aborting.") if (!$atoken);
 
-	$line = uri_escape($line);
-
-	# Hnadle interrupts #
+	# Handle interrupts #
 	$SIG{'INT'} = \&int_handler;
 	$SIG{'HUP'} = \&int_handler;
 
-	($fh, $tmpname) = tempfile("mstts_XXXXXXXX", DIR => $tmpdir, UNLINK => 1);
-
-	my $ua_request = HTTP::Request->new('GET' =>
-		"$url/Speak?text=$line&language=$lang&format=$format&options=$quality&appid=$atoken"
+	my $data = "<speak version='1.0' xml:lang='" . $lang . "'><voice xml:lang='". $lang
+	. "' xml:gender='" . $gender . "' name='" . $lang_list{"$lang-$gender"}
+	. "'>" . $line ."</voice></speak>";
+	my $ua_response = $ua->post(
+		$url,
+		"Content-type" => "application/ssml+xml",
+		"X-Microsoft-OutputFormat" => $format,
+		"Authorization" => $atoken,
+		"Content" => $data,
 	);
+	fatal_log("Failed to fetch file:", $ua_response->status_line) unless ($ua_response->is_success);
 
-	my $ua_response = $ua->request($ua_request, $tmpname);
-
-	fatal_log("Failed to fetch file.") unless ($ua_response->is_success);
-
-	# Convert mp3 file to 16bit mono raw #
-	system($mpg123, "-q", "-w", "$tmpname.wav", $tmpname) == 0
-		or fatal_log("$mpg123 failed: $?");
-
-	# Detect sox version #
-	if (!$sox_ver) {
-		$sox_ver = (system("$sox --version > /dev/null 2>&1") == 0) ? 14 : 12;
-		console_log("Found sox version $sox_ver in: $sox, mpg123 in: $mpg123") if ($debug);
-	}
-	my @soxargs = get_sox_args("$tmpname.wav", "$tmpname.$fexten");
-	system(@soxargs) == 0 or fatal_log("$sox failed: $?");
-	unlink "$tmpname.wav";
-
+	($fh, $tmpname) = tempfile("bingtts_XXXXXXXX", SUFFIX => ".$fexten", DIR => $tmpdir, UNLINK => 1);
+	binmode $fh;
+	print $fh $ua_response->decoded_content( charset => 'none' );
+	close $fh;
 	# Playback and save file in cache #
-	my $res = playback($tmpname, $intkey);
+	my $res = playback("$tmpdir/" . basename($tmpname, ".$fexten"), $intkey);
 	die if ($res < 0);
 	if ($usecache) {
 		console_log("Saving file $filename to cache") if ($debug);
-		move("$tmpname.$fexten", "$cachedir/$filename.$fexten");
+		move($tmpname, "$cachedir/$filename.$fexten");
 	} else {
-		unlink "$tmpname.$fexten";
+		unlink $tmpname;
 	}
 	last if ($res > 0);
 }
@@ -254,7 +222,7 @@ sub get_access_token {
 	my $tempfl;
 	my $fh;
 	my $spool = $ENV{'AST_SPOOL_DIR'};
-	my $tkfile = $spool . "/tmp/mstts.token";
+	my $tkfile = $spool . "/tmp/bing-tts.token";
 
 	if (-f $tkfile && open($fh, "<", $tkfile)) {
 		console_log("Reading access token from file.") if ($debug);
@@ -264,21 +232,17 @@ sub get_access_token {
 		}
 		close $fh;
 	}
-	if (!$token or time > $expire - 5) {
+	if (!$token or time > $expire - 10) {
 		$token = '';
+		fatal_log("No API Key provided.") if (!$key);
 		console_log("Getting a new access token.") if ($debug);
 		my $response = $ua->post(
-			"https://datamarket.accesscontrol.windows.net/v2/OAuth2-13/",
-			[
-				client_id     => $clientid,
-				client_secret => $clientsecret,
-				scope         => 'http://api.microsofttranslator.com',
-				grant_type    => 'client_credentials',
-			],
+			"https://westus.api.cognitive.microsoft.com/sts/v1.0/issueToken",
+			"Ocp-Apim-Subscription-Key" => $key,
 		);
-		if ($response->is_success and $response->content =~ /^\{"token_type":".+?","access_token":"(.+?)","expires_in":"(\d+?)","scope":".+?"\}$/) {
-			$token = uri_escape("Bearer $1");
-			$expire = time + $2;
+		if ($response->is_success) {
+			$token = "Bearer " . $response->content;
+			$expire = time + 600;
 			if ($spool) {
 				($fh, $tempfl) = tempfile();
 				print $fh "expire:$expire\n";
@@ -287,7 +251,7 @@ sub get_access_token {
 				move($tempfl, $tkfile);
 			}
 		} else {
-			console_log("Failed to get Access Token.") if ($debug);
+			console_log("Failed to get Access Token:", $response->status_line) if ($debug);
 		}
 	}
 	return $token;
@@ -328,41 +292,102 @@ sub playback {
 
 sub detect_format {
 # Detect the sound format used #
-	my @format;
+	my $format = 'ulaw';
 	print "GET FULL VARIABLE \${CHANNEL(audionativeformat)}\n";
 	my @reply = checkresponse();
-	for ($reply[1]) {
-		if    (/(silk|sln)12/)                    { @format = ("sln12", 12000); }
-		elsif (/(speex|slin|silk)16|g722|siren7/) { @format = ("sln16", 16000); }
-		elsif (/(speex|slin|celt)32|siren14/)     { @format = ("sln32", 32000); }
-		elsif (/(celt|slin)44/)                   { @format = ("sln44", 44100); }
-		elsif (/(celt|slin)48/)                   { @format = ("sln48", 48000); }
-		else                                      { @format = ("sln",    8000); }
-	}
-	return @format;
+	$format = 'sln16' if ( $reply[1] !~ /^(slin|g729|gsm|ulaw|alaw|ilbc|g726|g723)$/ );
+	return $format;
 }
 
-sub get_sox_args {
-# Set the appropiate sox cli arguments #
-	my ($source_file, $dest_file) = @_;
-
-	my @soxargs = ($sox, $source_file, "-q", "-r", $samplerate, "-t", "raw", $dest_file);
-	if ($speed != 1) {
-		if ($sox_ver >= 14) {
-			push(@soxargs, ("tempo", "-s", $speed));
-		} else {
-			push(@soxargs, ("stretch", 1/$speed, "80"));
-		}
-	}
-	return @soxargs;
+sub get_lang_list {
+	my %list = (
+		"ar-EG-Female"	=> "Microsoft Server Speech Text to Speech Voice (ar-EG, Hoda)",
+		"ar-SA-Male"	=> "Microsoft Server Speech Text to Speech Voice (ar-SA, Naayf)",
+		"bg-BG-Male"	=> "Microsoft Server Speech Text to Speech Voice (bg-BG, Ivan)",
+		"ca-ES-Female"	=> "Microsoft Server Speech Text to Speech Voice (ca-ES, HerenaRUS)",
+		"cs-CZ-Male"	=> "Microsoft Server Speech Text to Speech Voice (cs-CZ, Jakub)",
+		"da-DK-Female"	=> "Microsoft Server Speech Text to Speech Voice (da-DK, HelleRUS)",
+		"de-AT-Male"	=> "Microsoft Server Speech Text to Speech Voice (de-AT, Michael)",
+		"de-CH-Male"	=> "Microsoft Server Speech Text to Speech Voice (de-CH, Karsten)",
+		"de-DE-Female"	=> "Microsoft Server Speech Text to Speech Voice (de-DE, Hedda)",
+		"de-DE-Female"	=> "Microsoft Server Speech Text to Speech Voice (de-DE, HeddaRUS)",
+		"de-DE-Male"	=> "Microsoft Server Speech Text to Speech Voice (de-DE, Stefan, Apollo)",
+		"el-GR-Male"	=> "Microsoft Server Speech Text to Speech Voice (el-GR, Stefanos)",
+		"en-AU-Female"	=> "Microsoft Server Speech Text to Speech Voice (en-AU, Catherine)",
+		"en-AU-Female"	=> "Microsoft Server Speech Text to Speech Voice (en-AU, HayleyRUS)",
+		"en-CA-Female"	=> "Microsoft Server Speech Text to Speech Voice (en-CA, Linda)",
+		"en-CA-Female"	=> "Microsoft Server Speech Text to Speech Voice (en-CA, HeatherRUS)",
+		"en-GB-Female"	=> "Microsoft Server Speech Text to Speech Voice (en-GB, Susan, Apollo)",
+		"en-GB-Female"	=> "Microsoft Server Speech Text to Speech Voice (en-GB, HazelRUS)",
+		"en-GB-Male"	=> "Microsoft Server Speech Text to Speech Voice (en-GB, George, Apollo)",
+		"en-IE-Male"	=> "Microsoft Server Speech Text to Speech Voice (en-IE, Sean)",
+		"en-IN-Female"	=> "Microsoft Server Speech Text to Speech Voice (en-IN, Heera, Apollo)",
+		"en-IN-Female"	=> "Microsoft Server Speech Text to Speech Voice (en-IN, PriyaRUS)",
+		"en-IN-Male"	=> "Microsoft Server Speech Text to Speech Voice (en-IN, Ravi, Apollo)",
+		"en-US-Female"	=> "Microsoft Server Speech Text to Speech Voice (en-US, ZiraRUS)",
+		"en-US-Female"	=> "Microsoft Server Speech Text to Speech Voice (en-US, JessaRUS)",
+		"en-US-Male"	=> "Microsoft Server Speech Text to Speech Voice (en-US, BenjaminRUS)",
+		"es-ES-Female"	=> "Microsoft Server Speech Text to Speech Voice (es-ES, Laura, Apollo)",
+		"es-ES-Female"	=> "Microsoft Server Speech Text to Speech Voice (es-ES, HelenaRUS)",
+		"es-ES-Male"	=> "Microsoft Server Speech Text to Speech Voice (es-ES, Pablo, Apollo)",
+		"es-MX-Female"	=> "Microsoft Server Speech Text to Speech Voice (es-MX, HildaRUS)",
+		"es-MX-Male"	=> "Microsoft Server Speech Text to Speech Voice (es-MX, Raul, Apollo)",
+		"fi-FI-Female"	=> "Microsoft Server Speech Text to Speech Voice (fi-FI, HeidiRUS)",
+		"fr-CA-Female"	=> "Microsoft Server Speech Text to Speech Voice (fr-CA, Caroline)",
+		"fr-CA-Female"	=> "Microsoft Server Speech Text to Speech Voice (fr-CA, HarmonieRUS)",
+		"fr-CH-Male"	=> "Microsoft Server Speech Text to Speech Voice (fr-CH, Guillaume)",
+		"fr-FR-Female"	=> "Microsoft Server Speech Text to Speech Voice (fr-FR, Julie, Apollo)",
+		"fr-FR-Female"	=> "Microsoft Server Speech Text to Speech Voice (fr-FR, HortenseRUS)",
+		"fr-FR-Male"	=> "Microsoft Server Speech Text to Speech Voice (fr-FR, Paul, Apollo)",
+		"he-IL-Male"	=> "Microsoft Server Speech Text to Speech Voice (he-IL, Asaf)",
+		"hi-IN-Female"	=> "Microsoft Server Speech Text to Speech Voice (hi-IN, Kalpana, Apollo)",
+		"hi-IN-Female"	=> "Microsoft Server Speech Text to Speech Voice (hi-IN, Kalpana)",
+		"hi-IN-Male"	=> "Microsoft Server Speech Text to Speech Voice (hi-IN, Hemant)",
+		"hr-HR-Male"	=> "Microsoft Server Speech Text to Speech Voice (hr-HR, Matej)",
+		"hu-HU-Male"	=> "Microsoft Server Speech Text to Speech Voice (hu-HU, Szabolcs)",
+		"id-ID-Male"	=> "Microsoft Server Speech Text to Speech Voice (id-ID, Andika)",
+		"it-IT-Male"	=> "Microsoft Server Speech Text to Speech Voice (it-IT, Cosimo, Apollo)",
+		"ja-JP-Female"	=> "Microsoft Server Speech Text to Speech Voice (ja-JP, Ayumi, Apollo)",
+		"ja-JP-Male"	=> "Microsoft Server Speech Text to Speech Voice (ja-JP, Ichiro, Apollo)",
+		"ja-JP-Female"	=> "Microsoft Server Speech Text to Speech Voice (ja-JP, HarukaRUS)",
+		"ja-JP-Female"	=> "Microsoft Server Speech Text to Speech Voice (ja-JP, LuciaRUS)",
+		"ja-JP-Male"	=> "Microsoft Server Speech Text to Speech Voice (ja-JP, EkaterinaRUS)",
+		"ko-KR-Female"	=> "Microsoft Server Speech Text to Speech Voice (ko-KR, HeamiRUS)",
+		"ms-MY-Male"	=> "Microsoft Server Speech Text to Speech Voice (ms-MY, Rizwan)",
+		"nb-NO-Female"	=> "Microsoft Server Speech Text to Speech Voice (nb-NO, HuldaRUS)",
+		"nl-NL-Female"	=> "Microsoft Server Speech Text to Speech Voice (nl-NL, HannaRUS)",
+		"pl-PL-Female"	=> "Microsoft Server Speech Text to Speech Voice (pl-PL, PaulinaRUS)",
+		"pt-BR-Female"	=> "Microsoft Server Speech Text to Speech Voice (pt-BR, HeloisaRUS)",
+		"pt-BR-Male"	=> "Microsoft Server Speech Text to Speech Voice (pt-BR, Daniel, Apollo)",
+		"pt-PT-Female"	=> "Microsoft Server Speech Text to Speech Voice (pt-PT, HeliaRUS)",
+		"ro-RO-Male"	=> "Microsoft Server Speech Text to Speech Voice (ro-RO, Andrei)",
+		"ru-RU-Female"	=> "Microsoft Server Speech Text to Speech Voice (ru-RU, Irina, Apollo)",
+		"ru-RU-Male"	=> "Microsoft Server Speech Text to Speech Voice (ru-RU, Pavel, Apollo)",
+		"sk-SK-Male"	=> "Microsoft Server Speech Text to Speech Voice (sk-SK, Filip)",
+		"sl-SI-Male"	=> "Microsoft Server Speech Text to Speech Voice (sl-SI, Lado)",
+		"sv-SE-Female"	=> "Microsoft Server Speech Text to Speech Voice (sv-SE, HedvigRUS)",
+		"ta-IN-Male"	=> "Microsoft Server Speech Text to Speech Voice (ta-IN, Valluvar)",
+		"th-TH-Male"	=> "Microsoft Server Speech Text to Speech Voice (th-TH, Pattara)",
+		"tr-TR-Female"	=> "Microsoft Server Speech Text to Speech Voice (tr-TR, SedaRUS)",
+		"vi-VN-Male"	=> "Microsoft Server Speech Text to Speech Voice (vi-VN, An)",
+		"zh-CN-Female"	=> "Microsoft Server Speech Text to Speech Voice (zh-CN, HuihuiRUS)",
+		"zh-CN-Female"	=> "Microsoft Server Speech Text to Speech Voice (zh-CN, Yaoyao, Apollo)",
+		"zh-CN-Male"	=> "Microsoft Server Speech Text to Speech Voice (zh-CN, Kangkang, Apollo)",
+		"zh-HK-Female"	=> "Microsoft Server Speech Text to Speech Voice (zh-HK, Tracy, Apollo)",
+		"zh-HK-Female"	=> "Microsoft Server Speech Text to Speech Voice (zh-HK, TracyRUS)",
+		"zh-HK-Male"	=> "Microsoft Server Speech Text to Speech Voice (zh-HK, Danny, Apollo)",
+		"zh-TW-Female"	=> "Microsoft Server Speech Text to Speech Voice (zh-TW, Yating, Apollo)",
+		"zh-TW-Female"	=> "Microsoft Server Speech Text to Speech Voice (zh-TW, HanHanRUS)",
+		"zh-TW-Male"	=> "Microsoft Server Speech Text to Speech Voice (zh-TW, Zhiwei, Apollo)",
+	);
+	return %list;
 }
 
 sub console_log {
-	foreach my $message (@_) {
-		warn "$name $message\n";
-		print "NOOP \"$name $message\"\n";
-		checkresponse();
-	}
+	my $message = join(" ", @_);
+	warn "$name $message\n";
+	print "NOOP \"$name $message\"\n";
+	checkresponse();
 }
 
 sub fatal_log {
