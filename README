@@ -1,8 +1,8 @@
-================================================
-     Microsoft Bing TTS script for Asterisk
-================================================
+=====================================================================
+     Microsoft Azure Cognitive Services TTS script for Asterisk
+=====================================================================
 
-This script makes use of Microsoft Bing text to speech API
+This script makes use of Microsoft Azure text to speech API
 in order to render text to speech and play it back to the user.
 It supports a variety of different languages.
 
@@ -24,13 +24,13 @@ To make sure check your /etc/asterisk/asterisk.conf file
 -----
 Usage
 -----
-agi(mstts.agi,"text",[language],[intkey],[gender]): This will invoke the Bing TTS
+agi(mstts.agi,"text",[language],[intkey],[gender]): This will invoke the Azure TTS
 engine, render the text string to speech and play it back to the user.
 If 'intkey' is set the script will wait for user input. Any given interrupt keys will
 cause the playback to immediately terminate and the dialplan to proceed to the
 matching extension (this is mainly for use in IVR, see README for examples).
 
-The script contacts MS TTS service in order to get the voice data
+The script contacts MS Azure TTS service in order to get the voice data
 which then stores in a local cache (by default /tmp/) for future use.
 Parameters like default language, enabling or disabling caching and cache dir
 can be set up by editing the script.
@@ -76,35 +76,68 @@ exten => h,1,Hangup()
 -------------------
 Supported Languages
 -------------------
-ar-EG - Female
-de-DE - Female
-de-DE - Male
-en-AU - Female
-en-CA - Female
-en-GB - Female
-en-GB - Male
-en-IN - Male
-en-US - Female
-en-US - Male
-es-ES - Female
-es-ES - Male
-es-MX - Male
-fr-CA - Female
-fr-FR - Female
-fr-FR - Male
-it-IT - Male
-ja-JP - Female
-ja-JP - Male
-pt-BR - Male
-ru-RU - Female
-ru-RU - Male
-zh-CN - Female
-zh-CN - Female
-zh-CN - Male
-zh-HK - Female
-zh-HK - Male
-zh-TW - Female
-zh-TW - Male
+ar-EG-Female
+zh-CN-Female
+zh-HK-Female
+el-GR-Male
+cs-CZ-Male
+es-ES-Male
+ro-RO-Male
+ru-RU-Female
+ar-SA-Male
+pl-PL-Female
+en-GB-Female
+ms-MY-Male
+de-DE-Female
+fr-FR-Female
+pt-BR-Female
+sl-SI-Male
+ca-ES-Female
+fr-CA-Female
+es-MX-Male
+bg-BG-Male
+hu-HU-Male
+fr-CH-Male
+en-US-Female
+en-IN-Female
+pt-PT-Female
+hi-IN-Male
+zh-TW-Male
+ja-JP-Male
+tr-TR-Female
+fi-FI-Female
+nl-NL-Female
+de-CH-Male
+pt-BR-Male
+fr-FR-Male
+en-GB-Male
+de-DE-Male
+sv-SE-Female
+hr-HR-Male
+ta-IN-Male
+ru-RU-Male
+en-CA-Female
+es-ES-Female
+th-TH-Male
+id-ID-Male
+zh-HK-Male
+vi-VN-Male
+zh-CN-Male
+ko-KR-Female
+en-IE-Male
+en-US-Male
+en-IN-Male
+zh-TW-Female
+ja-JP-Female
+hi-IN-Female
+sk-SK-Male
+en-AU-Female
+es-MX-Female
+de-AT-Male
+it-IT-Male
+nb-NO-Female
+da-DK-Female
+he-IL-Male
 
 -----------------------
 Security Considerations

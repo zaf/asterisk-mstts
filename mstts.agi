@@ -1,9 +1,9 @@
 #!/usr/bin/env perl
 
 #
-# AGI script that uses Bing Text To Speech API for speech synthesis.
+# Script that uses Azure Cognitive Services for speech synthesis.
 #
-# Copyright (C) 2016, Lefteris Zafiris <zaf@fastmail.com>
+# Copyright (C) 2018, Lefteris Zafiris <zaf@fastmail.com>
 #
 # This program is free software, distributed under the terms of
 # the GNU General Public License Version 2. See the COPYING file
@@ -12,13 +12,13 @@
 # -----
 # Usage
 # -----
-# agi(mstts.agi,"text",[language],[intkey],[gender]): This will invoke the Bing TTS
+# agi(mstts.agi,"text",[language],[intkey],[gender]): This will invoke the Azure TTS
 # engine, render the text string to speech and play it back to the user.
 # If 'intkey' is set the script will wait for user input. Any given interrupt keys will
 # cause the playback to immediately terminate and the dialplan to proceed to the
 # matching extension (this is mainly for use in IVR, see README for examples).
 #
-# The script contacts Microsoft Bing TTS service in order to get the voice data
+# The script contacts Microsoft Azure TTS service in order to get the voice data
 # which then stores in a local cache (by default /tmp/) for future use.
 #
 # Parameters like default language, caching and cache dir
@@ -45,7 +45,7 @@ $| = 1;
 # ------------------------------ #
 #   User defined parameters:     #
 # ------------------------------ #
-# Bing API Key                   #
+# Azure API Key                  #
 my $key = "";
 
 # Default language               #
@@ -53,6 +53,9 @@ my $lang = 'en-US';
 
 # Default speaker gender         #
 my $gender ='Female';
+
+# Region (https://docs.microsoft.com/en-us/azure/cognitive-services/speech-service/regions#rest-apis)
+my $region = "westus";           #
 
 # Use of cache mechanism         #
 my $usecache = 1;
@@ -75,7 +78,7 @@ my $intkey  = "";
 my $tmpdir  = "/tmp";
 my $maxlen  = 4096;
 my $timeout = 10;
-my $url     = "https://westus.tts.speech.microsoft.com/cognitiveservices/v1";
+my $url     = "https://" . $region . ".tts.speech.microsoft.com/cognitiveservices/v1";
 my %lang_list = get_lang_list();
 
 # Store AGI input: Text, Language, Interrupt, Gender #
@@ -149,7 +152,7 @@ $format = 'raw-16khz-16bit-mono-pcm' if ($fexten eq 'sln16');
 
 # Initialize User agent #
 my $ua = LWP::UserAgent->new(ssl_opts => {verify_hostname => 1});
-$ua->agent("Asterisk Bing TTS module");
+$ua->agent("Asterisk MSTTS script");
 $ua->env_proxy;
 $ua->conn_cache(LWP::ConnCache->new());
 $ua->timeout($timeout);
@@ -237,7 +240,7 @@ sub get_access_token {
 		fatal_log("No API Key provided.") if (!$key);
 		console_log("Getting a new access token.") if ($debug);
 		my $response = $ua->post(
-			"https://westus.api.cognitive.microsoft.com/sts/v1.0/issueToken",
+			"https://" . $region . ".api.cognitive.microsoft.com/sts/v1.0/issueToken",
 			"Ocp-Apim-Subscription-Key" => $key,
 		);
 		if ($response->is_success) {
@@ -299,6 +302,7 @@ sub detect_format {
 	return $format;
 }
 
+# https://docs.microsoft.com/en-us/azure/cognitive-services/speech-service/language-support#text-to-speech
 sub get_lang_list {
 	my %list = (
 		"ar-EG-Female"	=> "Microsoft Server Speech Text to Speech Voice (ar-EG, Hoda)",

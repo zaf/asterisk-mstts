@@ -1,9 +1,9 @@
 #!/usr/bin/env perl
 
 #
-# Script that uses Bing Text To Speech API for speech synthesis.
+# Script that uses Azure Cognitive Services for speech synthesis.
 #
-# Copyright (C) 2016, Lefteris Zafiris <zaf@fastmail.com>
+# Copyright (C) 2018, Lefteris Zafiris <zaf@fastmail.com>
 #
 # This program is free software, distributed under the terms of
 # the GNU General Public License Version 2.
@@ -31,12 +31,13 @@ my $outfile;
 my $quiet;
 my $lang       = "en-US";
 my $gender     = "Female";
+my $region     = "westus";
 my $format     = "raw-16khz-16bit-mono-pcm";
 my $samplerate = 16000;
 my $level      = -3;
 my $speed      = 1;
 my $timeout    = 15;
-my $url        = "https://westus.tts.speech.microsoft.com/cognitiveservices/v1";
+my $url        = "https://" . $region . ".tts.speech.microsoft.com/cognitiveservices/v1";
 my %lang_list  = get_lang_list();
 my $sox        = `/usr/bin/which sox`;
 
@@ -139,7 +140,7 @@ exit 0;
 
 sub get_access_token {
 	my $response = $ua->post(
-		"https://westus.api.cognitive.microsoft.com/sts/v1.0/issueToken",
+		"https://" . $region . ".api.cognitive.microsoft.com/sts/v1.0/issueToken",
 		"Ocp-Apim-Subscription-Key" => $key,
 	);
 	fatal("Failed to get Access Token:", $response->status_line) if (!$response->is_success);
